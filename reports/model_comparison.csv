@@ -1,0 +1,7 @@
+model,threshold,accuracy,precision,recall,f1,roc_auc,missed_sick (FN),false_alarms (FP),cv_precision_at_target
+Logistic Regression,default 0.50,0.7935,0.7963,0.8431,0.819,0.8892,16,22,
+Logistic Regression,tuned 0.39,0.8098,0.7769,0.9216,0.843,0.8892,8,27,0.7759
+Random Forest,default 0.50,0.7935,0.7807,0.8725,0.8241,0.9003,13,25,
+Random Forest,tuned 0.44,0.8043,0.775,0.9118,0.8378,0.9003,9,27,0.7704
+XGBoost,default 0.50,0.8098,0.8018,0.8725,0.8357,0.8828,13,22,
+XGBoost,tuned 0.35,0.8098,0.7724,0.9314,0.8444,0.8828,7,28,0.7619

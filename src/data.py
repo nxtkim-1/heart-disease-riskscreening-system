@@ -1,8 +1,7 @@
-"""
-Loading, cleaning and preprocessing for the UCI Heart Disease dataset.
+"""Load, clean, and preprocess the UCI Heart Disease data.
 
-Everything that touches the raw data lives here, so the training script and
-the Streamlit app clean patient data in exactly the same way.
+Training and the app both use this module, so a row typed into the form is
+cleaned the same way as the training rows.
 """
 from pathlib import Path
 
@@ -16,26 +15,19 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = PROJECT_ROOT / "data" / "heart_disease_uci.csv"
 
-# ---- Feature groups -------------------------------------------------------
-# Continuous measurements: fill gaps with the median, then scale.
+# Continuous: median fill, then scale.
 NUMERIC_FEATURES = ["age", "trestbps", "chol", "thalch", "oldpeak"]
-# Categories with more than two values: fill gaps with the most common value, then one-hot encode.
+# Multi-value categories: most-common fill, then one-hot encode.
 CATEGORICAL_FEATURES = ["cp", "restecg", "slope"]
-# Yes/no columns, already turned into 0/1 by clean_features().
+# Yes/no columns, already 0/1 after clean_features().
 BINARY_FEATURES = ["sex", "fbs", "exang"]
 
+# Left out: id (a row number), dataset (the source hospital; disease rate
+# differs by site and a new patient has none), ca and thal (missing on most rows).
 FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES + BINARY_FEATURES
 TARGET = "target"
 
-# Columns deliberately left out:
-#   id       - row number, carries no information
-#   dataset  - which hospital the patient came from; not a patient attribute,
-#              and disease rates differ wildly by hospital, so the model would learn the hospital
-#   ca, thal - missing for 66% and 53% of patients, mostly at the non-Cleveland hospitals
-DROPPED_COLUMNS = ["id", "dataset", "ca", "thal"]
-
-# Plain-English names for charts. Keys are raw column names, plus the
-# "column_value" names the one-hot encoder creates (e.g. cp_asymptomatic).
+# Chart labels. Keys are column names, plus one-hot names like "cp_asymptomatic".
 LABELS = {
     "age": "Age",
     "sex": "Male",
@@ -70,10 +62,7 @@ def load_raw(path: Path = DATA_PATH) -> pd.DataFrame:
 
 
 def clean_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Fix data-entry problems and turn yes/no columns into 0/1.
-
-    Used on the training data AND on whatever a user types into the app.
-    """
+    """Turn sentinel zeros into missing values and yes/no columns into 0/1."""
     df = df.copy()
 
     # A cholesterol or resting blood pressure of 0 is physically impossible.
@@ -90,7 +79,6 @@ def clean_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_dataset(path: Path = DATA_PATH) -> tuple[pd.DataFrame, pd.Series]:
-    """Return (X, y) ready for train/test splitting."""
     df = clean_features(load_raw(path))
     # num is 0 (no disease) to 4 (severe). We only ask: any disease or not?
     y = (df["num"] > 0).astype(int).rename(TARGET)
@@ -99,12 +87,7 @@ def load_dataset(path: Path = DATA_PATH) -> tuple[pd.DataFrame, pd.Series]:
 
 
 def build_preprocessor() -> ColumnTransformer:
-    """Imputation + encoding + scaling, packaged so it is fit on training data only.
-
-    Putting this inside the model pipeline (instead of cleaning the whole
-    dataset up front) prevents data leakage: the medians, most-common values
-    and scaling statistics are learned from the training fold only.
-    """
+    """Fill, encode, and scale. Fit on training rows only so test-set stats don't leak in."""
     numeric = Pipeline([
         ("impute", SimpleImputer(strategy="median")),
         ("scale", StandardScaler()),

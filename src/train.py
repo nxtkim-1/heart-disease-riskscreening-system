@@ -1,13 +1,7 @@
-"""
-Train and compare logistic regression, random forest and XGBoost, tune each
-model's decision threshold with cross-validation, and save the chosen model.
+"""Train logistic regression, random forest, and XGBoost.
 
-Outputs:
-    reports/model_comparison.csv   all metrics for all three models
-    reports/confusion_matrices.png
-    reports/roc_curves.png
-    reports/feature_importance.png
-    models/heart_model.joblib      the chosen model + its decision threshold (used by app.py)
+Thresholds are chosen on training-set cross-validation. Writes the comparison
+table, plots, and the chosen model under reports/ and models/.
 """
 import joblib
 import matplotlib
@@ -43,8 +37,8 @@ RED, BLUE = "#C44E52", "#4C72B0"
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
 
 
-def make_models() -> dict[str, Pipeline]:
-    """Each model gets its own copy of the preprocessing steps."""
+def build_models() -> dict[str, Pipeline]:
+    """One pipeline per model, each with its own copy of the preprocessing steps."""
     classifiers = {
         "Logistic Regression": LogisticRegression(max_iter=1000),
         "Random Forest": RandomForestClassifier(
@@ -77,11 +71,9 @@ def metrics_at(y_true, proba, threshold: float) -> dict:
 
 
 def pick_threshold(y_true, proba, target_recall: float) -> float:
-    """Highest threshold that still catches `target_recall` of sick patients.
+    """Highest threshold that still catches `target_recall` of the sick patients.
 
-    Lowering the threshold below 0.5 trades more false alarms for fewer
-    missed patients. We choose it on cross-validation predictions from the
-    training set, never on the test set.
+    Chosen from training-set cross-validation scores, never from the test set.
     """
     for t in np.arange(0.95, 0.0, -0.01):
         if recall_score(y_true, (proba >= t).astype(int)) >= target_recall:
@@ -94,8 +86,8 @@ def main() -> None:
     MODELS.mkdir(exist_ok=True)
 
     X, y = load_dataset()
-    # stratify=y keeps the sick/healthy ratio the same in both splits.
-    # The test set is locked away until the very end.
+    # stratify keeps the disease rate the same in both splits.
+    # The test set is scored once, after the threshold is chosen.
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE
     )
@@ -104,13 +96,12 @@ def main() -> None:
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     rows, fitted, test_probas = [], {}, {}
 
-    for name, pipe in make_models().items():
-        # 1) Validation: out-of-fold probabilities on the training set
+    for name, pipe in build_models().items():
+        # Out-of-fold probabilities on the training set, used only to pick the threshold.
         oof_proba = cross_val_predict(pipe, X_train, y_train, cv=cv, method="predict_proba")[:, 1]
         threshold = pick_threshold(y_train, oof_proba, TARGET_RECALL)
         cv_tuned = metrics_at(y_train, oof_proba, threshold)
 
-        # 2) Final fit on all training data, score once on the untouched test set
         pipe.fit(X_train, y_train)
         proba = pipe.predict_proba(X_test)[:, 1]
         fitted[name], test_probas[name] = pipe, proba
@@ -128,10 +119,8 @@ def main() -> None:
     results.drop(columns=["_threshold_value"]).round(4).to_csv(
         REPORTS / "model_comparison.csv", index=False)
 
-    # ---- Choose the final model ----------------------------------------
-    # Rule decided BEFORE looking at the test set: among models tuned to catch
-    # 90% of sick patients in cross-validation, keep the one that raises the
-    # fewest false alarms there (highest CV precision).
+    # Decided from CV only: among models tuned to the recall target, keep the
+    # one with the fewest false alarms there (highest CV precision).
     tuned = results.dropna(subset=["cv_precision_at_target"])
     thresholds = dict(zip(tuned["model"], tuned["_threshold_value"]))
     best = tuned.loc[tuned["cv_precision_at_target"].idxmax()]
@@ -151,8 +140,6 @@ def main() -> None:
     )
     print(f"Saved {MODELS / 'heart_model.joblib'}")
 
-    # ---- Plots -----------------------------------------------------------
-    # Confusion matrices at each model's tuned threshold
     fig, axes = plt.subplots(1, 3, figsize=(14, 4.2))
     for ax, (name, proba) in zip(axes, test_probas.items()):
         thr = thresholds[name]
@@ -166,7 +153,7 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(REPORTS / "confusion_matrices.png", dpi=150, bbox_inches="tight")
 
-    # ROC curves, with a dot where each model's tuned threshold puts it
+    # Dot on each curve: false-positive and true-positive rates at that model's threshold.
     y_true = y_test.to_numpy()
     fig, ax = plt.subplots(figsize=(6, 5.5))
     for name, proba in test_probas.items():
@@ -183,7 +170,6 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(REPORTS / "roc_curves.png", dpi=150)
 
-    # Feature importance from the chosen model
     pipe = fitted[best_name]
     names = pipe.named_steps["preprocess"].get_feature_names_out()
     model = pipe.named_steps["model"]

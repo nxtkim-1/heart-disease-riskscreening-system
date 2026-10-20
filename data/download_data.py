@@ -1,7 +1,4 @@
-"""
-Download the four UCI Heart Disease files (Cleveland, Hungary, Switzerland,
-VA Long Beach) and combine them into data/heart_disease_uci.csv.
-"""
+"""Download the four UCI hospital files and write data/heart_disease_uci.csv."""
 from pathlib import Path
 
 import numpy as np

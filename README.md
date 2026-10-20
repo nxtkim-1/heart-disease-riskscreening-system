@@ -96,16 +96,6 @@ python -m src.train                # trains and compares the models, saves plots
 streamlit run app.py               # opens the app in your browser
 ```
 
-```
-data/download_data.py   downloads the four UCI hospital files and combines them
-src/data.py             loading, cleaning, feature lists, preprocessing pipeline
-src/explore.py          missing values, hidden zeros, disease rate by hospital
-src/train.py            model comparison, threshold tuning, plots, saves the final model
-app.py                  Streamlit app
-reports/                charts and the results table
-models/                 the saved model
-```
-
 ## Limitations
 
 - The data is from 1981 to 1988, and every patient had already been referred for an angiogram.

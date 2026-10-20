@@ -1,7 +1,4 @@
-"""
-Data report: missing values, impossible zeros, class balance and disease rate
-by hospital. Saves two charts to reports/.
-"""
+"""Report missing values, impossible zeros, and disease rate by hospital."""
 import matplotlib
 
 matplotlib.use("Agg")
@@ -23,7 +20,6 @@ def main() -> None:
     print("Column types:")
     print(df.dtypes.to_string(), "\n")
 
-    # --- Missing values ---
     missing = df.isna().sum()
     missing_pct = (missing / len(df) * 100).round(1)
     print("Missing values (count, %):")
@@ -31,19 +27,16 @@ def main() -> None:
         if missing[col]:
             print(f"  {col:<10} {missing[col]:>4}  ({missing_pct[col]}%)")
 
-    # --- Hidden missing values: zeros that can't be real ---
     print("\nImpossible zeros (really 'not measured'):")
     for col in ["chol", "trestbps"]:
         print(f"  {col:<10} {(df[col] == 0).sum():>4} rows equal 0")
 
-    # --- Target ---
     has_disease = (df["num"] > 0)
     print(f"\nPatients with heart disease: {has_disease.sum()} / {len(df)} "
           f"({has_disease.mean():.0%})")
     print("\nDisease rate by hospital:")
     print(has_disease.groupby(df["dataset"]).mean().map("{:.0%}".format).to_string())
 
-    # --- Plot: missing values per column, counting the disguised zeros too ---
     blank_pct = df.isna().mean() * 100
     zero_pct = pd.Series({col: (df[col] == 0).mean() * 100 for col in ["chol", "trestbps"]})
     zero_pct = zero_pct.reindex(df.columns, fill_value=0)
@@ -66,7 +59,6 @@ def main() -> None:
     fig.savefig(REPORTS / "missing_values.png", dpi=150)
     print(f"\nSaved {REPORTS / 'missing_values.png'}")
 
-    # --- Plot: disease rate by hospital ---
     rate = has_disease.groupby(df["dataset"]).mean().sort_values() * 100
     patients = df["dataset"].value_counts()
 

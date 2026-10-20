@@ -1,6 +1,4 @@
-"""
-Streamlit app: enter a patient's details and get an estimated risk of heart disease.
-"""
+"""Streamlit form that estimates heart-disease risk from a patient's measurements."""
 import joblib
 import numpy as np
 import pandas as pd
@@ -13,7 +11,7 @@ MODEL_PATH = PROJECT_ROOT / "models" / "heart_model.joblib"
 st.set_page_config(page_title="Heart disease risk screen", page_icon="🫀")
 
 
-@st.cache_resource  # load the model once, not on every click
+@st.cache_resource
 def load_model():
     if not MODEL_PATH.exists():
         return None
@@ -26,15 +24,14 @@ if bundle is None:
     st.stop()
 
 pipeline, threshold = bundle["pipeline"], bundle["threshold"]
-m = bundle["test_metrics"]
+metrics = bundle["test_metrics"]
 
-# ---- Sidebar: what the model is and how good it is -----------------------
 with st.sidebar:
     st.subheader("About this model")
     st.write(f"**{bundle['model_name']}**, trained on 920 patients from the UCI Heart Disease dataset.")
     st.write(f"Results on {bundle['n_test']} held-out test patients the model never saw during training:")
-    st.metric("Recall (sick patients caught)", f"{m['recall']:.0%}")
-    st.metric("Precision (flags that were right)", f"{m['precision']:.0%}")
+    st.metric("Recall (sick patients caught)", f"{metrics['recall']:.0%}")
+    st.metric("Precision (flags that were right)", f"{metrics['precision']:.0%}")
     st.caption(
         f"The decision threshold is {threshold:.2f}, not 0.50. It was lowered on purpose: "
         "missing a sick patient is worse than a false alarm."
@@ -97,7 +94,6 @@ if submitted:
         "thalch": thalch, "exang": yes_no[exang], "oldpeak": oldpeak,
         "slope": np.nan if slope == UNKNOWN else slope,
     }])
-    # Same cleaning as the training data, then the pipeline handles the rest
     X = clean_features(patient)[bundle["features"]]
     prob = float(pipeline.predict_proba(X)[0, 1])
 

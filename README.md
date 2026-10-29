@@ -96,6 +96,20 @@ python -m src.train                # trains and compares the models, saves plots
 streamlit run app.py               # opens the app in your browser
 ```
 
+## Using the app
+
+`streamlit run app.py` opens the app in the browser. Fill in the patient's details and press
+**Estimate risk**.
+
+- **Any field can be left as "Unknown".** Tick the *Unknown* box next to a measurement, or pick it
+  from the menu, when a value wasn't taken. The model fills it in with the median or most common
+  value from the training patients, the same way it filled gaps in the original data.
+- **Read the result as a probability, not a verdict.** The app shows the estimated chance of heart
+  disease and flags the patient when it reaches 0.39, the cut-off chosen to catch about 9 in 10
+  sick patients. "Not flagged" means below that line, not "healthy."
+- **It's a prototype.** It was trained on 920 patients referred for angiography between 1981 and
+  1988, so treat the number as a demonstration of the modelling, not a reading of a real patient.
+
 ## Limitations
 
 - The data is from 1981 to 1988, and every patient had already been referred for an angiogram.

@@ -63,14 +63,17 @@ with st.form("patient"):
     cp = st.selectbox(
         "Chest pain type",
         ["asymptomatic", "typical angina", "atypical angina", "non-anginal"],
-        help="Typical angina: chest pain brought on by exertion and relieved by rest.",
+        help="Typical angina: chest pain brought on by exertion and relieved by rest. "
+        "Asymptomatic means no chest pain at all.",
     )
-    exang = st.radio("Chest pain during exercise?", ["No", "Yes", UNKNOWN], horizontal=True)
+    exang = st.radio("Chest pain during exercise?", ["No", "Yes", UNKNOWN], horizontal=True,
+                 help="Whether exercise brought on chest pain (angina).")
 
     st.subheader("Measurements")
     trestbps = optional_number("Resting blood pressure (mm Hg)", 80, 220, 130, 1,
                                "Systolic pressure at rest.", "trestbps")
-    chol = optional_number("Serum cholesterol (mg/dl)", 100, 600, 240, 1, None, "chol")
+    chol = optional_number("Serum cholesterol (mg/dl)", 100, 600, 240, 1,
+                        "Total cholesterol from a blood test.", "chol")
     fbs = st.radio("Fasting blood sugar above 120 mg/dl?", ["No", "Yes", UNKNOWN], horizontal=True)
 
     st.subheader("Exercise test and ECG")
@@ -79,9 +82,12 @@ with st.form("patient"):
                               "How far the ST segment drops on the ECG during exercise vs. rest.",
                               "oldpeak")
     slope = st.selectbox("Slope of the peak exercise ST segment",
-                         ["flat", "upsloping", "downsloping", UNKNOWN])
+                         ["flat", "upsloping", "downsloping", UNKNOWN],
+                         help="The direction of the ST segment on the ECG at peak exercise.")
     restecg = st.selectbox("Resting ECG result",
-                           ["normal", "st-t abnormality", "lv hypertrophy", UNKNOWN])
+                           ["normal", "st-t abnormality", "lv hypertrophy", UNKNOWN],
+                           help="ST-T abnormality: changes in the ST segment or T wave. "
+                                "LV hypertrophy: signs of a thickened heart wall.")
 
     submitted = st.form_submit_button("Estimate risk", type="primary")
 
@@ -109,7 +115,7 @@ if submitted:
 
 st.divider()
 st.caption(
-    "Not a medical device and not medical advice. "
+    "A prototype, not a medical device, and not medical advice. "
     "The model was trained on ~900 patients referred for angiography between 1981 and 1988, "
     "so it does not represent the general population."
 )

@@ -10,6 +10,36 @@ Telling a sick patient they're fine is worse than a false alarm, because a false
 means a follow-up test. So I didn't optimise for accuracy. I set the model up to catch at least 90%
 of sick patients and then measured how many false alarms that costs.
 
+## Case study: the 1989 paper behind the data
+
+![Greyscale X-ray of the left coronary artery filled with dye, with two arrows marking narrowed sections](docs/coronary_angiogram.jpg)
+
+*A coronary angiogram: dye in the heart's arteries under X-ray, with arrows on the narrowed sections.
+An example image, not a patient from this dataset. Image: Pantaleo et al., BMC Cancer 2012, 12:231,
+[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/), via
+[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Angiography_coronary_stenosis_01.jpg).*
+
+The data comes from one paper: Detrano et al., "International application of a new probability
+algorithm for the diagnosis of coronary artery disease", *American Journal of Cardiology*, 1989
+([doi:10.1016/0002-9149(89)90524-9](https://doi.org/10.1016/0002-9149(89)90524-9)).
+
+The authors built a model on 303 patients at the Cleveland Clinic that turned clinical measurements
+and non-invasive test results into a probability of coronary disease. Then they tried it on patients
+at three other sites: Budapest, Long Beach, and Zurich and Basel. It overestimated disease in Budapest
+and Long Beach (by about 10 and 5 percentage points on average) and underestimated it in the Swiss
+group (by about 7). The measurements were the same. The hospital had changed.
+
+Every patient in the study had a coronary angiogram, and that reading is the label: a patient counts
+as having disease when a major artery is narrowed by more than half its diameter.
+
+Two things in this project follow from that paper:
+
+- **The hospital is part of the answer, so the model is not allowed to see it.** The paper's model
+  shifted from site to site. In this data the share of patients with disease also differs a lot by
+  hospital, so I dropped the hospital column (see below).
+- **These are patients someone already sent for an angiogram.** That is a sicker group than the
+  general population, which is the first item under Limitations.
+
 ## What I found in the data
 
 Before modelling anything I spent time just looking at the dataset, and it was messier than I

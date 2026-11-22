@@ -11,6 +11,9 @@ Key guarantees:
 from __future__ import annotations
 
 import logging
+import os
+import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +42,13 @@ from src.meta_client import (
     live_cleared,
 )
 from src.meta_ledger import SpendGuardError, SpendLedger
-from src.schemas import AssistantRequest, AssistantResponse, PatientInput, PredictionResponse
+from src.schemas import (
+    EXTERNAL_QUESTION_TEMPLATES,
+    AssistantRequest,
+    AssistantResponse,
+    PatientInput,
+    PredictionResponse,
+)
 from src.security import RedactingLogFilter, format_safe_error, redact_text
 from src.synthetic_profiles import SyntheticPrivacyViolation, list_synthetic_profiles
 
@@ -54,7 +63,14 @@ def create_app(
     *,
     meta_client_factory=None,
     ledger: SpendLedger | None = None,
+    meta_run_id: str | None = None,
 ) -> FastAPI:
+    """Build the app.
+
+    `meta_client_factory` (tests) is called at most once: the resulting client is shared
+    by every request, so one server process is one spend "run" and `run_cap_usd` applies
+    across HTTP requests instead of resetting per request.
+    """
     app = FastAPI(
         title="Heart-Disease Risk Screening System (Informational Prototype)",
         version="2.0.0",
@@ -66,6 +82,25 @@ def create_app(
 
     app.state.meta_client_factory = meta_client_factory
     app.state.ledger = ledger
+    app.state.meta_run_id = meta_run_id or os.environ.get("HEART_RUN_ID") or f"server-{uuid.uuid4().hex[:12]}"
+    app.state.meta_client = None
+    app.state.meta_client_lock = threading.Lock()
+
+    def get_shared_meta_client() -> MetaAssistantClient:
+        """Lazily build ONE server-scoped client (double-checked under a lock)."""
+        client = app.state.meta_client
+        if client is not None:
+            return client
+        with app.state.meta_client_lock:
+            if app.state.meta_client is None:
+                factory = app.state.meta_client_factory
+                # A failed construction (e.g. live mode not cleared) is not cached.
+                app.state.meta_client = (
+                    factory()
+                    if factory is not None
+                    else MetaAssistantClient(ledger=app.state.ledger, run_id=app.state.meta_run_id)
+                )
+            return app.state.meta_client
 
     @app.middleware("http")
     async def session_hygiene_middleware(request: Request, call_next):
@@ -245,10 +280,14 @@ def create_app(
     async def assistant_profiles() -> dict[str, Any]:
         return {
             "synthetic_only_policy": (
-                "External Meta API calls only accept these registered synthetic archetype profiles. "
-                "Zero real patient data ever leaves this machine."
+                "External Meta API calls only accept these registered synthetic archetype profiles "
+                "and the canonical question templates below. Free-text questions are answered "
+                "locally offline. Zero real patient data ever leaves this machine."
             ),
             "profiles": list_synthetic_profiles(),
+            "external_question_templates": [
+                {"template_id": tid, "question": text} for tid, text in EXTERNAL_QUESTION_TEMPLATES.items()
+            ],
         }
 
     @app.get("/api/assistant/ledger")
@@ -264,14 +303,12 @@ def create_app(
             ),
         }
 
+    # Plain `def` (not async): FastAPI runs it in a worker thread, so a slow live Meta call
+    # does not block the event loop. Concurrent requests share one client; the ledger's
+    # atomic reserve-before-call keeps them under every cap.
     @app.post("/api/assistant/explain", response_model=AssistantResponse)
-    async def assistant_explain(req: AssistantRequest) -> AssistantResponse:
-        client = None
-        if req.use_external_meta_api:
-            if app.state.meta_client_factory is not None:
-                client = app.state.meta_client_factory()
-            else:
-                client = MetaAssistantClient(ledger=app.state.ledger)
+    def assistant_explain(req: AssistantRequest) -> AssistantResponse:
+        client = get_shared_meta_client() if req.use_external_meta_api else None
         return explain_screening(req, meta_client=client)
 
     @app.post("/api/session/clear")

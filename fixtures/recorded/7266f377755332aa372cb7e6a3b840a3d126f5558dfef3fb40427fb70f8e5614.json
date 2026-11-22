@@ -1,0 +1,47 @@
+{
+  "fixture_origin": "offline_schema_replay_stub",
+  "live_api_verified": false,
+  "request": {
+    "json": {
+      "max_tokens": 450,
+      "messages": [
+        {
+          "content": "You are an informational assistant explaining output from an archival 1981-1988 UCI heart-disease logistic regression prototype trained on 920 coronary-angiography referral patients. STRICT RULES: (1) This is strictly informational and NEVER medical advice or a diagnosis. (2) You are only ever shown SYNTHETIC archetype profiles, never real patients. (3) Always communicate uncertainty honestly: mention the 0.39 screening threshold, the 95% bootstrap probability interval, any imputed unknown fields, and that a 55% angiography-cohort base rate overestimates risk in general populations. (4) Never diagnose, never tell anyone they are healthy, and never prescribe or alter medications. (5) Respond concisely in plain language (3-5 sentences).",
+          "role": "system"
+        },
+        {
+          "content": "Explain the following SYNTHETIC screening archetype output in plain language with honest uncertainty and zero medical advice:\n{'synthetic_profile_id': 'SYNTH-001', 'is_synthetic': True, 'features': {'age': 41.0, 'sex': 'Female', 'cp': 'non-anginal', 'trestbps': 116.0, 'chol': 195.0, 'fbs': False, 'restecg': 'normal', 'thalch': 176.0, 'exang': False, 'oldpeak': 0.0, 'slope': 'upsloping'}, 'baseline_probability': 0.0234, 'threshold': 0.39, 'flagged': False, 'risk_band': 'below_threshold', 'bootstrap_95ci': [0.0103, 0.0437], 'missing_fields': [], 'top_contributions': [{'feature': 'age', 'label': 'Age', 'log_odds_contribution': -0.532, 'direction': 'decreases_risk'}, {'feature': 'thalch', 'label': 'Max heart rate on exercise test', 'log_odds_contribution': -0.5174, 'direction': 'decreases_risk'}, {'feature': 'oldpeak', 'label': 'ST depression on exercise ECG', 'log_odds_contribution': -0.4323, 'direction': 'decreases_risk'}, {'feature': 'chol', 'label': 'Cholesterol', 'log_odds_contribution': -0.217, 'direction': 'decreases_risk'}], 'calibrated_reference_probability': 0.0488, 'question': 'Explain what the 0.39 screening threshold means for this synthetic result and why being flagged or not flagged is not a diagnosis.'}",
+          "role": "user"
+        }
+      ],
+      "model": "muse-spark-1.3",
+      "temperature": 0.2
+    },
+    "model": "muse-spark-1.3",
+    "path": "/chat/completions",
+    "synthetic_digest": "44255ce361d56648077fe1b92ab5d8f0f8d0351cba52e048d7abd81c698ab736",
+    "synthetic_profile_id": "SYNTH-001"
+  },
+  "response": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "[OFFLINE REPLAY FIXTURE \u2014 NOT A LIVE META API CALL] [Synthetic profile SYNTH-001] For informational purposes only (not medical advice): the frozen baseline Logistic Regression model estimates a 2.3% probability (95% bootstrap sampling interval: 1.0%\u20134.4%), which is below the 39% screening cutoff (not flagged, which does not rule out disease). Inputs pulling the estimate lower include Age, Max heart rate on exercise test. Regarding your question: The baseline screening threshold is 0.39 (39%), lowered from 0.50 on training cross-validation to target ~90% sensitivity so fewer sick patients are missed, at the cost of more false alarms. Important uncertainty note: this score reflects patterns in 920 patients referred for coronary angiography (1981\u20131988, 55% prevalence) and can shift substantially across hospitals or lower-risk general populations.",
+          "role": "assistant"
+        }
+      }
+    ],
+    "id": "replay-stub-7266f3777553",
+    "model": "muse-spark-1.3",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 135,
+      "prompt_tokens": 380,
+      "total_tokens": 515
+    }
+  },
+  "synthetic_only": true,
+  "synthetic_profile_id": "SYNTH-001"
+}

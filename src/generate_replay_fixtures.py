@@ -17,19 +17,23 @@ from src.assistant import build_local_explanation, build_meta_messages
 from src.inference import predict_patient
 from src.meta_client import DEFAULT_FIXTURES_DIR, canonical_request_hash
 from src.meta_ledger import DEFAULT_ASSISTANT_MODEL
+from src.schemas import DEFAULT_ASSISTANT_QUESTION, EXTERNAL_QUESTION_TEMPLATES
 from src.synthetic_profiles import SYNTHETIC_PROFILES
 
-DEFAULT_QUESTION = "Explain this screening result, the main drivers, and its uncertainty in plain language."
+DEFAULT_QUESTION = DEFAULT_ASSISTANT_QUESTION
 
 
 def generate_offline_replay_stubs(fixtures_dir: Path = DEFAULT_FIXTURES_DIR) -> list[Path]:
     fixtures_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for profile in SYNTHETIC_PROFILES:
+    # One stub per (synthetic profile x canonical question template): these are the only
+    # requests the external path will ever accept.
+    pairs = [(p, q) for p in SYNTHETIC_PROFILES for q in EXTERNAL_QUESTION_TEMPLATES.values()]
+    for profile, question in pairs:
         patient = profile.to_patient_input()
         features = patient.model_dump()
         pred = predict_patient(patient)
-        messages = build_meta_messages(profile.profile_id, features, pred, DEFAULT_QUESTION)
+        messages = build_meta_messages(profile.profile_id, features, pred, question)
         json_body = {
             "model": DEFAULT_ASSISTANT_MODEL,
             "messages": messages,
@@ -46,7 +50,7 @@ def generate_offline_replay_stubs(fixtures_dir: Path = DEFAULT_FIXTURES_DIR) -> 
         req_hash = canonical_request_hash(desc)
         stub_content = (
             "[OFFLINE REPLAY FIXTURE — NOT A LIVE META API CALL] "
-            + build_local_explanation(pred, DEFAULT_QUESTION, synthetic_profile_id=profile.profile_id)
+            + build_local_explanation(pred, question, synthetic_profile_id=profile.profile_id)
         )
         fixture = {
             "fixture_origin": "offline_schema_replay_stub",

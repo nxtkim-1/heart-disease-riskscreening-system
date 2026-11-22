@@ -297,7 +297,12 @@
           <p class="muted" id="synth-scenario"></p>
 
           <div class="field-group">
-            <label for="assistant-question">Question about this synthetic screening output</label>
+            <label for="assistant-template">Question for the Meta adapter (fixed templates only — free text never leaves this machine)</label>
+            <select id="assistant-template"></select>
+          </div>
+
+          <div class="field-group">
+            <label for="assistant-question">Free-text question (answered locally offline only)</label>
             <textarea id="assistant-question" rows="3">Explain this screening result, the main drivers, and its uncertainty in plain language.</textarea>
           </div>
 

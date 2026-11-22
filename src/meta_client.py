@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -41,8 +40,8 @@ from src.meta_ledger import (
     assert_standard_model,
     estimate_request_cost,
 )
-from src.security import find_pii_keys, format_safe_error
-from src.synthetic_profiles import assert_registered_synthetic
+from src.security import contains_sensitive_material, find_pii_keys, find_pii_text, format_safe_error
+from src.synthetic_profiles import SyntheticPrivacyViolation, assert_registered_synthetic
 
 MODES: tuple[str, ...] = ("replay", "record", "live")
 MODE_ENV = "HEART_ASSISTANT_MODE"
@@ -61,6 +60,10 @@ class ReplayFixtureMissingError(FileNotFoundError):
 
 class SecretLeakError(RuntimeError):
     """Raised if an active API key would be written to a fixture or response."""
+
+
+class OutgoingPayloadRefused(SyntheticPrivacyViolation):
+    """Raised when outgoing message text looks like PII, a secret, or a private path."""
 
 
 def _read_api_key() -> str | None:
@@ -90,6 +93,38 @@ def default_http_transport(url: str, headers: dict[str, str], payload: bytes, ti
     req = urllib.request.Request(url, data=payload, method="POST", headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+MAX_OUTGOING_CHARS = 20_000
+_ALLOWED_ROLES = frozenset({"system", "user"})
+
+
+def assert_outgoing_messages_safe(messages: Any) -> None:
+    """Fail closed unless every outgoing message is well-formed and free of PII/secrets/paths.
+
+    Refusal messages name only the categories found, never the offending text.
+    """
+    if not isinstance(messages, list) or not messages:
+        raise OutgoingPayloadRefused("Outgoing messages must be a non-empty list.")
+    total = 0
+    for idx, msg in enumerate(messages):
+        if not isinstance(msg, dict) or set(msg) - {"role", "content"}:
+            raise OutgoingPayloadRefused(f"Outgoing message {idx} must contain only 'role' and 'content'.")
+        role, content = msg.get("role"), msg.get("content")
+        if role not in _ALLOWED_ROLES or not isinstance(content, str):
+            raise OutgoingPayloadRefused(f"Outgoing message {idx} has an invalid role or non-text content.")
+        total += len(content)
+        pii = find_pii_text(content)
+        if pii:
+            raise OutgoingPayloadRefused(
+                f"Outgoing message {idx} refused before external API call: possible PII ({', '.join(pii)})."
+            )
+        if contains_sensitive_material(content):
+            raise OutgoingPayloadRefused(
+                f"Outgoing message {idx} refused before external API call: secret or private path detected."
+            )
+    if total > MAX_OUTGOING_CHARS:
+        raise OutgoingPayloadRefused(f"Outgoing messages exceed {MAX_OUTGOING_CHARS} characters.")
 
 
 def _extract_token_usage(resp: dict[str, Any]) -> dict[str, int] | None:
@@ -148,8 +183,6 @@ class MetaAssistantClient:
         self.fixtures_dir = Path(fixtures_dir or DEFAULT_FIXTURES_DIR)
         self.base_url = base_url.rstrip("/")
         self.transport = transport or default_http_transport
-        self._lock = threading.Lock()
-        self._pending_holds: list[dict[str, Any]] = []
 
     def __repr__(self) -> str:
         return f"MetaAssistantClient(mode={self.mode!r}, model={self.model!r}, run_id={self.meter.run_id!r})"
@@ -174,6 +207,9 @@ class MetaAssistantClient:
         pii_hits = find_pii_keys(synthetic_features)
         if pii_hits:
             raise PermissionError(f"PII keys refused before external API call: {pii_hits}")
+        # 2. Defense in depth on the exact payload: refuse PII, secrets, or private paths in
+        #    any outgoing message text, even if an upstream allowlist was bypassed.
+        assert_outgoing_messages_safe(messages)
 
         assert_standard_model(self.model)
         json_body = {
@@ -208,28 +244,28 @@ class MetaAssistantClient:
             "output_tokens": int(max_output_tokens),
         }
 
-        with self._lock:
-            est_cost, env_before = self.meter.preflight(
-                model=self.model,
-                envelope=envelope,
-                worst_units=worst_units,
-                pending_holds=self._pending_holds,
-            )
-            hold = {
-                "cost_usd": est_cost,
-                "run_id": self.meter.run_id,
-                "envelope": envelope,
-                "pending": True,
-            }
-            self._pending_holds.append(hold)
+        # Atomic reserve-before-call: cap check + persisted worst-case hold under the ledger
+        # lock, visible to every thread, client instance, and process sharing this ledger.
+        est_cost, env_before, hold_id = self.meter.reserve(
+            model=self.model,
+            envelope=envelope,
+            worst_units=worst_units,
+            hold_meta={
+                "mode": self.mode,
+                "request_hash": req_hash,
+                "synthetic_profile_id": profile.profile_id,
+            },
+        )
 
+        # From here on the hold is only ever converted into a charge, never silently dropped:
+        # if settling itself fails, the hold stays and later expires into a worst-case charge.
         t0 = time.monotonic()
         try:
             resp = self._send_http(path, json_body)
         except Exception as exc:
             latency_ms = round((time.monotonic() - t0) * 1000)
             self._settle(
-                hold,
+                hold_id,
                 envelope=envelope,
                 units=worst_units,
                 cost_usd=est_cost,
@@ -241,8 +277,6 @@ class MetaAssistantClient:
             )
             self.meter.check_alarms(envelope, env_before, env_before + est_cost)
             raise RuntimeError(format_safe_error(exc, context="Meta API request failed")) from exc
-        finally:
-            self._release(hold)
 
         latency_ms = round((time.monotonic() - t0) * 1000)
         usage_units = _extract_token_usage(resp)
@@ -258,7 +292,7 @@ class MetaAssistantClient:
             logged_units = worst_units
 
         self._settle(
-            hold,
+            hold_id,
             envelope=envelope,
             units=logged_units,
             cost_usd=actual_cost,
@@ -292,14 +326,15 @@ class MetaAssistantClient:
         }
         return self.transport(f"{self.base_url}{path}", headers, payload)
 
-    def _settle(self, hold: dict[str, Any], **kwargs: Any) -> None:
-        with self._lock:
-            self.ledger.append(model=self.model, run_id=self.meter.run_id, mode=self.mode, **kwargs)
-            self._pending_holds[:] = [h for h in self._pending_holds if h is not hold]
-
-    def _release(self, hold: dict[str, Any]) -> None:
-        with self._lock:
-            self._pending_holds[:] = [h for h in self._pending_holds if h is not hold]
+    def _settle(self, hold_id: str, **kwargs: Any) -> None:
+        """Write the charge and drop its hold in one critical section (no visibility gap)."""
+        self.ledger.append(
+            model=self.model,
+            run_id=self.meter.run_id,
+            mode=self.mode,
+            release_hold_id=hold_id,
+            **kwargs,
+        )
 
     def _fixture_path(self, req_hash: str) -> Path:
         return self.fixtures_dir / f"{req_hash}.json"

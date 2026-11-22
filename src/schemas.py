@@ -236,19 +236,47 @@ class PredictionResponse(BaseModel):
     disclaimer: str
 
 
+DEFAULT_ASSISTANT_QUESTION = (
+    "Explain this screening result, the main drivers, and its uncertainty in plain language."
+)
+
+# The ONLY question texts allowed to leave this machine on the external Meta API path.
+# Free text could carry real patient details or PII, so the external path accepts a fixed
+# set of canonical educational prompts (each has a recorded replay fixture per synthetic
+# profile). Free-text questions stay on the local_offline path, which makes no network call.
+EXTERNAL_QUESTION_TEMPLATES: dict[str, str] = {
+    "explain_result": DEFAULT_ASSISTANT_QUESTION,
+    "explain_uncertainty": (
+        "Explain how uncertain this synthetic screening estimate is, including the bootstrap "
+        "interval, any imputed fields, and population shift."
+    ),
+    "explain_threshold": (
+        "Explain what the 0.39 screening threshold means for this synthetic result and why being "
+        "flagged or not flagged is not a diagnosis."
+    ),
+}
+_ALLOWED_EXTERNAL_QUESTIONS: frozenset[str] = frozenset(EXTERNAL_QUESTION_TEMPLATES.values())
+
+
+def is_allowed_external_question(question: str) -> bool:
+    """True only for an exact canonical template text (after outer whitespace is stripped)."""
+    return isinstance(question, str) and question.strip() in _ALLOWED_EXTERNAL_QUESTIONS
+
+
 class AssistantRequest(BaseModel):
     """Request to the explanation assistant.
 
     External Meta API calls (`use_external_meta_api=True`) STRICTLY require a registered
-    synthetic_profile_id and forbid arbitrary/real patient inputs.
+    synthetic_profile_id, forbid arbitrary/real patient inputs, and only accept a question
+    from EXTERNAL_QUESTION_TEMPLATES (no free text).
     Local offline explanations (`use_external_meta_api=False`) work on any validated PatientInput
-    without making any network call.
+    and any free-text question without making any network call.
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     question: str = Field(
-        default="Explain this screening result, the main drivers, and its uncertainty in plain language.",
+        default=DEFAULT_ASSISTANT_QUESTION,
         min_length=3,
         max_length=600,
     )
@@ -278,6 +306,14 @@ class AssistantRequest(BaseModel):
                     "Privacy boundary violation: custom patient payloads cannot be submitted alongside "
                     "use_external_meta_api=true. Use a registered synthetic_profile_id for external API calls, "
                     "or set use_external_meta_api=false for 100% local offline explanation."
+                )
+            if not is_allowed_external_question(self.question):
+                # Deliberately does not echo the submitted text back (it may contain PII).
+                raise ValueError(
+                    "Privacy boundary: custom free-text questions are never sent to the external Meta API. "
+                    "Choose one of the canonical question templates "
+                    f"({', '.join(sorted(EXTERNAL_QUESTION_TEMPLATES))}) or set "
+                    "use_external_meta_api=false to ask a free-text question locally offline."
                 )
         else:
             if self.synthetic_profile_id is None and self.patient is None:

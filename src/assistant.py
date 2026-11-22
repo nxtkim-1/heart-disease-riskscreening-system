@@ -6,8 +6,10 @@ Strict safety & privacy architecture:
      contributions, clinical glossary definitions, and epistemic uncertainty intervals.
      Zero network calls; safe for any validated PatientInput.
    - `meta_replay` / `meta_record` / `meta_live`: Metered Meta API adapter that accepts
-     REGISTERED SYNTHETIC PROFILES ONLY (`SYNTH-001`..`SYNTH-006`). Custom/real patient
-     inputs are refused in code before any external request can be constructed.
+     REGISTERED SYNTHETIC PROFILES ONLY (`SYNTH-001`..`SYNTH-006`) and canonical question
+     templates ONLY (`EXTERNAL_QUESTION_TEMPLATES`). Custom/real patient inputs and free-text
+     questions are refused in code before any external request can be constructed, and the
+     client scans the final outgoing messages for PII, secrets, and private paths.
 2. AUTHORITATIVE OUTPUT GATE:
    - Every response is verified in code to enforce `informational_only=True`,
      `not_medical_advice=True`, mandatory non-medical-advice disclaimer, honest uncertainty
@@ -22,7 +24,13 @@ from typing import Any
 
 from src.inference import INFORMATIONAL_DISCLAIMER, predict_patient
 from src.meta_client import MetaAssistantClient
-from src.schemas import AssistantRequest, AssistantResponse, PatientInput, PredictionResponse
+from src.schemas import (
+    AssistantRequest,
+    AssistantResponse,
+    PatientInput,
+    PredictionResponse,
+    is_allowed_external_question,
+)
 from src.security import redact_text
 from src.synthetic_profiles import (
     SyntheticPrivacyViolation,
@@ -76,13 +84,55 @@ INPUT_GLOSSARY: dict[str, str] = {
     ),
 }
 
-# Authoritative output gate patterns: block diagnostic verdicts or treatment orders.
-_FORBIDDEN_MEDICAL_CLAIMS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"(?i)\byou\s+(?:definitely\s+)?(?:have|do\s+not\s+have)\s+(?:heart|coronary\s+artery)\s+disease\b"),
-    re.compile(r"(?i)\b(?:start|stop)\s+taking\s+[a-z0-9\s\-]{2,30}\b"),
-    re.compile(r"(?i)\bi\s+(?:diagnose|prescribe|recommend\s+medication)\b"),
-    re.compile(r"(?i)\bno\s+need\s+to\s+see\s+a\s+doctor\b"),
+# Authoritative output gate patterns: block diagnostic verdicts, reassurance that someone is
+# healthy, discouraging clinical follow-up, and treatment/medication orders. Hedged phrasing
+# ("this is not a clinical diagnosis", "does not rule out disease") must stay allowed.
+_CLINICIAN = r"(?:a\s+|your\s+|any\s+)?(?:clinician|doctor|physician|cardiologist|specialist|gp|nurse|health\s*care\s+provider)"
+_MEDICATION = (
+    r"(?:an?\s+|your\s+|daily\s+|low[-\s]dose\s+|baby\s+)*"
+    r"(?:aspirin|statins?|medications?|medicines?|meds|drugs?|pills?|nitroglycerin|beta[-\s]?blockers?|"
+    r"blood\s+thinners?|anticoagulants?|ace\s+inhibitors?|insulin|metformin|dose)"
 )
+_FORBIDDEN_MEDICAL_CLAIMS: tuple[re.Pattern[str], ...] = (
+    # Diagnostic verdicts about the reader.
+    re.compile(
+        r"(?i)\byou\s+(?:definitely\s+|certainly\s+|clearly\s+|probably\s+)?(?:have|do\s+not\s+have|don'?t\s+have|"
+        r"are\s+suffering\s+from|are\s+free\s+of)\s+(?:heart|coronary(?:\s+artery)?|cardiac|cardiovascular)\s+disease\b"
+    ),
+    re.compile(r"(?i)\byou(?:\s+are|'re)\s+(?:completely\s+|perfectly\s+|totally\s+|now\s+)?(?:healthy|disease[-\s]free|in\s+the\s+clear|fine|safe|not\s+at\s+risk)\b"),
+    re.compile(r"(?i)(?<!not\sa\s)\bclean\s+bill\s+of\s+health\b"),
+    re.compile(
+        r"(?i)\b(?:this|the\s+(?:result|score|model|estimate|screen(?:ing)?))\s+(?:is|provides|gives|represents|"
+        r"confirms)\s+(?:a|your|the)\s+(?:clinical\s+|medical\s+|definitive\s+)?diagnosis\b"
+    ),
+    re.compile(r"(?i)\byour\s+(?:clinical\s+|medical\s+)?diagnosis\s+is\b"),
+    re.compile(r"(?i)\b(?:this|the\s+(?:result|score|model|estimate))\s+(?:confirms|proves|rules\s+out)\b"),
+    re.compile(r"(?i)\bi\s+(?:diagnose|prescribe|recommend\s+(?:medication|treatment|surgery|a\s+stent|an?\s+angioplasty))\b"),
+    # Discouraging clinical follow-up.
+    re.compile(rf"(?i)\bno\s+need\s+(?:to\s+(?:see|visit|consult|call)|for)\s+{_CLINICIAN}\b"),
+    re.compile(
+        rf"(?i)\byou\s+(?:do\s+not|don'?t|dont|won'?t|will\s+not|no\s+longer)\s+need\s+(?:to\s+(?:see|visit|consult|call)\s+)?"
+        rf"(?:{_CLINICIAN}|medical\s+(?:care|attention|follow[-\s]?up)|follow[-\s]?up|further\s+testing)\b"
+    ),
+    re.compile(rf"(?i)\b(?:skip|avoid|cancel)\s+(?:seeing\s+|your\s+)?(?:{_CLINICIAN}|appointment|follow[-\s]?up)\b"),
+    # Medication / treatment orders.
+    re.compile(r"(?i)\b(?:start|stop|keep)\s+taking\s+[a-z0-9\s\-]{2,30}\b"),
+    re.compile(rf"(?i)\b(?:take|start|stop|increase|decrease|double|halve|skip|discontinue)\s+(?:taking\s+)?{_MEDICATION}\b"),
+    re.compile(
+        rf"(?i)\byou\s+(?:should|must|need\s+to|ought\s+to)\s+(?:take|start|stop|undergo|get|have)\s+"
+        rf"(?:{_MEDICATION}|surgery|an?\s+(?:angioplasty|stent|bypass|angiogram))\b"
+    ),
+)
+
+OUTPUT_GATE_NOTICE = (
+    "[Output gate: the external assistant's wording was withheld because it contained diagnostic, "
+    "reassurance, or treatment phrasing. Showing the deterministic local explanation instead.] "
+)
+
+
+def find_forbidden_medical_claims(text: str) -> list[str]:
+    """Return the regex patterns (as strings) that match diagnostic/prescriptive phrasing."""
+    return [pat.pattern for pat in _FORBIDDEN_MEDICAL_CLAIMS if pat.search(text or "")]
 
 SYSTEM_PROMPT = (
     "You are an informational assistant explaining output from an archival 1981-1988 UCI heart-disease "
@@ -262,16 +312,21 @@ def build_meta_messages(
 def enforce_authoritative_output_gate(raw_text: str, pred: PredictionResponse) -> str:
     """Authoritative code gate on assistant output.
 
-    Redacts secrets/paths, rejects or replaces prescriptive diagnostic statements, and
-    guarantees an explicit informational/non-medical-advice qualifier is present.
+    Redacts secrets/paths and guarantees an explicit informational/non-medical-advice
+    qualifier. If ANY diagnostic, reassurance, or treatment phrasing is found, the whole text
+    is withheld (fail closed) and replaced by the deterministic local explanation: patching
+    words out of a sentence can leave fragments such as "...aspirin daily" that still read
+    as advice.
     """
     cleaned = redact_text(raw_text or "").strip()
     if not cleaned:
         cleaned = build_local_explanation(pred, "Explain this result.")
 
-    for pat in _FORBIDDEN_MEDICAL_CLAIMS:
-        if pat.search(cleaned):
-            cleaned = pat.sub("[redacted non-informational diagnostic/treatment phrasing]", cleaned)
+    if find_forbidden_medical_claims(cleaned):
+        fallback = redact_text(build_local_explanation(pred, "Explain this result."))
+        if find_forbidden_medical_claims(fallback):  # Should never happen; refuse rather than emit.
+            fallback = "Explanation withheld by the informational output gate."
+        cleaned = OUTPUT_GATE_NOTICE + fallback
 
     low = cleaned.lower()
     if "not medical advice" not in low and "informational" not in low:
@@ -301,6 +356,13 @@ def explain_screening(
     if req.use_external_meta_api:
         if not req.synthetic_profile_id:
             raise SyntheticPrivacyViolation("External Meta API requires a registered synthetic_profile_id.")
+        # Second check (the schema validator is the first): catches requests built with
+        # model_construct() or mutated after validation. Never echoes the question text.
+        if req.patient is not None or not is_allowed_external_question(req.question):
+            raise SyntheticPrivacyViolation(
+                "External Meta API only accepts a registered synthetic profile with a canonical "
+                "question template; free-text questions are answered locally offline only."
+            )
         profile = get_synthetic_profile(req.synthetic_profile_id)
         patient = profile.to_patient_input()
         features_dict = patient.model_dump()

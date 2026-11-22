@@ -177,7 +177,7 @@ def test_assistant_endpoints_privacy_and_replay(tmp_path):
     assert bad_id.status_code == 403
     assert bad_id.json()["error"] == "privacy_boundary_violation"
 
-    # Unrecorded custom question in replay mode fails loudly (404).
+    # Custom free-text question on the external path is refused before any client is used (422).
     miss = client.post(
         "/api/assistant/explain",
         json={
@@ -186,8 +186,8 @@ def test_assistant_endpoints_privacy_and_replay(tmp_path):
             "question": "Brand new unrecorded question never seen in fixtures?",
         },
     )
-    assert miss.status_code == 404
-    assert miss.json()["error"] == "replay_fixture_missing"
+    assert miss.status_code == 422
+    assert miss.json()["error"] == "validation_error"
 
 
 def test_unhandled_error_redacts_secret_and_private_path(monkeypatch, tmp_path):

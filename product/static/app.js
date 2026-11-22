@@ -3,6 +3,15 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Escape any server/API-provided text before it is interpolated into innerHTML.
+  const esc = (v) =>
+    String(v === null || v === undefined ? "" : v)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
   // Tab navigation
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -75,8 +84,8 @@
     const banner = $("result-banner");
     banner.className = "alert " + (data.flagged ? "alert-danger" : "alert-ok");
     banner.innerHTML = data.flagged
-      ? `<strong>Flagged (Above ${pct(data.threshold)} Cutoff):</strong> Estimated probability ${pct(data.probability)}. ${data.uncertainty.threshold_proximity_note}`
-      : `<strong>Not Flagged (Below ${pct(data.threshold)} Cutoff):</strong> Estimated probability ${pct(data.probability)}. ${data.uncertainty.threshold_proximity_note}`;
+      ? `<strong>Flagged (Above ${pct(data.threshold)} Cutoff):</strong> Estimated probability ${pct(data.probability)}. ${esc(data.uncertainty.threshold_proximity_note)}`
+      : `<strong>Not Flagged (Below ${pct(data.threshold)} Cutoff):</strong> Estimated probability ${pct(data.probability)}. ${esc(data.uncertainty.threshold_proximity_note)}`;
 
     $("res-prob").textContent = pct(data.probability);
     const u = data.uncertainty;
@@ -112,7 +121,7 @@
       const cls = c.direction === "increases_risk" ? "contrib-up" : "contrib-dn";
       const sign = c.log_odds_contribution > 0 ? "+" : "";
       row.innerHTML = `
-        <span>${c.label}</span>
+        <span>${esc(c.label)}</span>
         <div class="contrib-bar-track"><div class="contrib-bar-fill ${cls}" style="width:${width.toFixed(0)}%"></div></div>
         <span class="mono" style="text-align:right;">${sign}${c.log_odds_contribution.toFixed(2)}</span>
       `;
@@ -300,7 +309,7 @@
         const lohoBody = $("loho-table").querySelector("tbody");
         lohoBody.innerHTML = lohoLr.per_hospital.map((r) => `
           <tr>
-            <td><strong>${r.held_out_hospital}</strong></td>
+            <td><strong>${esc(r.held_out_hospital)}</strong></td>
             <td>${r.at_cv_threshold.n} (${pct(r.at_cv_threshold.prevalence)})</td>
             <td>${pct(r.at_cv_threshold.recall)} [${pct(r.bootstrap_95ci_at_cv_threshold.recall[0])}, ${pct(r.bootstrap_95ci_at_cv_threshold.recall[1])}]</td>
             <td>${r.at_cv_threshold.roc_auc.toFixed(3)}</td>
@@ -312,7 +321,7 @@
         const harmBody = $("harm-table").querySelector("tbody");
         harmBody.innerHTML = stats.harmonization_comparison.map((s) => `
           <tr>
-            <td>${s.label}</td>
+            <td>${esc(s.label)}</td>
             <td>${s.inference_hospital_id_free ? "Yes" : "No (Bound)"}</td>
             <td>${s.nested_train_cv_n736.roc_auc.toFixed(4)}</td>
             <td>${s.nested_train_cv_n736.ece_quantile.toFixed(4)}</td>
@@ -328,8 +337,8 @@
           for (const it of items) {
             subRows.push(`
               <tr>
-                <td>${dim}</td>
-                <td>${it.subgroup}</td>
+                <td>${esc(dim)}</td>
+                <td>${esc(it.subgroup)}</td>
                 <td>${it.n} (${it.n_pos})</td>
                 <td>${pct(it.recall)} [${pct(it.bootstrap_95ci.recall[0])}, ${pct(it.bootstrap_95ci.recall[1])}]</td>
                 <td>${pct(it.precision)}</td>
@@ -347,7 +356,12 @@
         const pData = await pResp.json();
         syntheticProfiles = pData.profiles || [];
         const sel = $("synth-select");
-        sel.innerHTML = syntheticProfiles.map((p) => `<option value="${p.profile_id}">${p.profile_id} — ${p.title}</option>`).join("");
+        sel.innerHTML = syntheticProfiles.map((p) => `<option value="${esc(p.profile_id)}">${esc(p.profile_id)} — ${esc(p.title)}</option>`).join("");
+        // External path: only canonical templates are selectable (free text stays local).
+        const tSel = $("assistant-template");
+        tSel.innerHTML = (pData.external_question_templates || [])
+          .map((t) => `<option value="${esc(t.question)}">${esc(t.question)}</option>`)
+          .join("");
         const updateScenario = () => {
           const cur = syntheticProfiles.find((p) => p.profile_id === sel.value);
           $("synth-scenario").textContent = cur ? `${cur.clinical_scenario} (SHA-256: ${cur.digest_sha256.slice(0, 12)}…)` : "";
@@ -384,7 +398,8 @@
   async function runAssistant(useExternal) {
     $("assistant-error").classList.add("hidden");
     const profileId = $("synth-select").value;
-    const question = $("assistant-question").value.trim();
+    // The Meta adapter only accepts a canonical template; free text is sent to the local path only.
+    const question = useExternal ? $("assistant-template").value : $("assistant-question").value.trim();
     try {
       const resp = await fetch("/api/assistant/explain", {
         method: "POST",
@@ -405,8 +420,8 @@
       $("assistant-output").classList.remove("hidden");
       $("asst-mode-pill").textContent = `Mode: ${body.mode} · Spend: $${body.spend_usd.toFixed(4)}`;
       $("asst-text").textContent = body.explanation;
-      $("asst-takeaways").innerHTML = body.key_takeaways.map((t) => `<li>${t}</li>`).join("");
-      $("asst-uncertainty").innerHTML = body.uncertainty_reminders.map((t) => `<li>${t}</li>`).join("");
+      $("asst-takeaways").innerHTML = body.key_takeaways.map((t) => `<li>${esc(t)}</li>`).join("");
+      $("asst-uncertainty").innerHTML = body.uncertainty_reminders.map((t) => `<li>${esc(t)}</li>`).join("");
       const lResp = await fetch("/api/assistant/ledger");
       if (lResp.ok) renderLedger(await lResp.json());
     } catch (err) {

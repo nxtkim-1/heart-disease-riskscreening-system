@@ -70,7 +70,7 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 _PATH_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    # Windows drive paths, e.g. C:\Users\alice\... or C:/Users/alice/...
+    # Windows drive-letter paths with either backslash or forward-slash separators
     (re.compile(r"[A-Za-z]:\\(?:[^\s\"'<>|;,)}\]]+\\)*[^\s\"'<>|;,)}\]]*"), "[REDACTED_PATH]"),
     (re.compile(r"[A-Za-z]:/(?:[^\s\"'<>|;,)}\]]+/)*[^\s\"'<>|;,)}\]]*"), "[REDACTED_PATH]"),
     # Windows UNC paths \\server\share\...
@@ -156,6 +156,54 @@ def find_pii_keys(payload: Any) -> list[str]:
 
     _walk(payload)
     return sorted(set(found))
+
+
+# Free-text patterns that suggest identifying personal information. Each entry is
+# (category, pattern). Matching returns only the category, never the matched text,
+# so a refusal message can never echo the PII it caught.
+_PII_TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("email_address", re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")),
+    ("us_ssn", re.compile(r"(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)")),
+    (
+        "phone_number",
+        re.compile(r"(?<![\d.])(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}(?![\d.])"),
+    ),
+    (
+        "calendar_date",
+        re.compile(
+            r"(?<!\d)(?:(?:19|20)\d{2}[-/.](?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])"
+            r"|(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:19|20)?\d{2})(?!\d)"
+        ),
+    ),
+    (
+        "identifier_label",
+        re.compile(
+            r"(?i)\b(?:mrn|medical\s+record(?:\s+number)?|health\s+card|ohip|social\s+security|ssn|"
+            r"patient\s+id|date\s+of\s+birth|dob|insurance\s+(?:id|number)|passport|driver'?s?\s+licen[cs]e)\b"
+        ),
+    ),
+    (
+        "personal_name_statement",
+        re.compile(r"(?i)\b(?:my\s+name\s+is|(?:patient|full|first|last)\s+name\b|name\s*[:=])"),
+    ),
+    # Case-sensitive on purpose: "Mr. Smith" is a name, "dr" inside ordinary text is not.
+    ("personal_name_statement", re.compile(r"\b(?:Mr|Mrs|Ms|Dr)\.?\s+[A-Z][a-z]+")),
+    (
+        "street_address",
+        re.compile(
+            r"(?i)\b\d{1,5}\s+(?:[A-Za-z]+\s+){1,3}(?:street|avenue|ave|road|boulevard|blvd|"
+            r"drive|lane|crescent|court)\b"
+        ),
+    ),
+    ("postal_code", re.compile(r"(?i)\b[ABCEGHJ-NPRSTVXY]\d[A-Z][ -]?\d[A-Z]\d\b")),
+)
+
+
+def find_pii_text(text: str) -> list[str]:
+    """Return sorted PII categories detected in free text (never the matched values)."""
+    if not text:
+        return []
+    return sorted({category for category, pattern in _PII_TEXT_PATTERNS if pattern.search(text)})
 
 
 def safe_relative_path(path: Path, root: Path) -> str:

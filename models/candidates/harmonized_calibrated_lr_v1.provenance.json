@@ -1,0 +1,38 @@
+{
+  "artifact": "models/candidates/harmonized_calibrated_lr_v1.joblib",
+  "model_name": "Site-Deconfounded Platt-Calibrated Logistic Regression (v1)",
+  "weight_mode": "site_deconfounded",
+  "calibration": "platt",
+  "platt_params": {
+    "intercept_a": 0.156305,
+    "slope_b": 1.047467
+  },
+  "threshold": 0.37,
+  "target_recall_cv": 0.9,
+  "features": [
+    "age",
+    "trestbps",
+    "chol",
+    "thalch",
+    "oldpeak",
+    "cp",
+    "restecg",
+    "slope",
+    "sex",
+    "fbs",
+    "exang"
+  ],
+  "hospital_id_used_at_inference": false,
+  "dataset": "UCI Heart Disease (4 hospitals: Cleveland, Hungary, Switzerland, VA Long Beach)",
+  "dataset_sha256": "a5e3e9a0cf2728aa5c3132966d4586dd10fa489a177a6fb12ae6909dc7802c98",
+  "split": "80/20 stratified train_test_split (fit strictly on n=736 training rows; 184 test rows excluded)",
+  "grouping_note": "Evaluated under Leave-One-Hospital-Out (LOHO) CV in reports/statistical_deepening.json",
+  "n_train": 736,
+  "train_prevalence": 0.553,
+  "seed": 42,
+  "created_utc": "2026-11-22T20:05:20+00:00",
+  "sklearn_version": "1.7.2",
+  "script": "src/harmonization.py",
+  "repro_command": "python -m src.harmonization",
+  "baseline_preserved_sha256": "aa7f0be5903c16ce7070858b91f8b8ac1764fec0c385894ea8a959dbb291d4ec"
+}

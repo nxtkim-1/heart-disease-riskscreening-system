@@ -113,6 +113,41 @@ training data only. If I had filled them in using the whole dataset first, a lit
 about the test patients would leak into training and the results would look better than they
 really are.
 
+## Statistical deepening: calibration, 4-hospital source shift, and harmonization
+
+A single headline recall (`92.2%` on `184` test patients, `102` positive cases) hides finite-sample uncertainty, cross-hospital calibration shift, and subgroup disparities. The statistical deepening suite ([`src/statistics.py`](src/statistics.py), [`src/harmonization.py`](src/harmonization.py), full report in [`reports/STATISTICAL_REPORT.md`](reports/STATISTICAL_REPORT.md)) audits the **frozen baseline** (`models/heart_model.joblib`, SHA-256 verified untouched) read-only and evaluates all new calibration/harmonization candidates strictly on **unspent 5-fold CV inside the 736 training rows** and **zero-hospital-overlap Leave-One-Hospital-Out (LOHO) CV** across all four sites (`n=920`, `B=2000` bootstrap draws, `seed=42`).
+
+*This is statistical auditing on archival 1981–1988 angiography data, **not** clinical validation.*
+
+| Evaluation regime | Grouping | n (pos) | Recall (95% bootstrap CI) | Precision (95% CI) | ROC-AUC (95% CI) | Quantile ECE | Brier |
+|---|---|---:|---|---|---|---|---|
+| **Frozen Baseline (Historical Audit, Read-Only)** | Row-stratified (4 sites mixed) | 184 (102) | 92.2% [86.7%, 97.0%] | 77.7% [69.9%, 85.1%] | 0.889 [0.842, 0.931] | 0.060 | 0.135 |
+| **Unspent 5-Fold OOF CV (Train only, LR)** | Row-stratified inside train | 736 (407) | 90.2% [87.2%, 92.9%] | 77.6% [73.8%, 81.1%] | 0.865 [0.836, 0.891] | 0.046 | 0.144 |
+| **Leave-One-Hospital-Out (LOHO, LR @ 0.39)** | Hospital-grouped (zero site overlap) | 920 (509) | 88.2% [85.3%, 90.9%] | 72.1% [68.5%, 75.4%] | 0.835 [0.808, 0.860] | 0.046 | 0.166 |
+
+![Calibration reliability curves](reports/calibration_curves.png)
+![4-hospital source shift](reports/hospital_source_shift.png)
+![Subgroup recall and 95% confidence intervals](reports/subgroup_recall_ci.png)
+![Hospital harmonization comparison](reports/harmonization_comparison.png)
+
+Key statistical findings:
+- **Wide finite-sample recall interval**: On `102` positive test patients, `92.2%` recall spans **`[86.7%, 97.0%]`** (bootstrap) / **`[85.3%, 96.0%]`** (exact Wilson) — over 10 percentage points wide.
+- **Cross-hospital base-rate shift reproduces Detrano et al. (1989)**: Under zero-overlap LOHO, the model over-predicts disease in Hungary (`+16.6 pp`, ECE `0.166`) and Cleveland (`+8.1 pp`, ECE `0.098`), and severely under-predicts in Switzerland (`-32.3 pp`, ECE `0.323`, where prevalence is `93.5%` and cholesterol is `100%` missing).
+- **Subgroup disparities under LOHO (threshold 0.39)**: Female recall drops to **`70.0% [56.2%, 82.5%]`** vs Male **`90.2% [87.4%, 92.7%]`** despite near-identical ROC-AUC (`0.812` vs `0.805`) due to lower base rate and sex coefficient offset. Patients with **3+ missing features** drop to **`69.2% [56.4%, 80.9%]`** recall and `0.185` ECE vs `92.7%` recall with 0 missing fields.
+- **Stealth missingness-proxy leakage proved**: Adding missingness indicators (`add_indicator=True`) boosts pooled Train CV AUC from `0.8651` to `0.8769` (`+1.2 pp`), **but drops unseen-hospital LOHO Macro AUC from `0.8112` to `0.8020` (`-0.9 pp`)**, because missingness patterns (`chol` missing 100% in Switzerland; `slope` missing 65% in Hungary) act as a stealth hospital-ID proxy.
+- **Harmonization & Bayes prior-shift decomposition**: Site-deconfounded IPW + out-of-fold Platt scaling achieves the lowest unspent Train CV ECE (`0.0388` vs `0.0463`), saved separately as versioned candidate `models/candidates/harmonized_calibrated_lr_v1.joblib`. Applying a 1-parameter Bayes prior-odds intercept adjustment to a target site's known prevalence cuts unseen-hospital LOHO Macro ECE by **55%** (`0.1706` to `0.0767`) and Macro Brier from `0.1728` to `0.1248`, proving that site base-rate shift—not feature slope—drives most cross-hospital miscalibration.
+
+## Product API, privacy boundary, and synthetic-only Meta assistant
+
+In addition to the hardened Streamlit prototype ([`app.py`](app.py)), [`product/api.py`](product/api.py) provides a hardened FastAPI backend + offline static frontend (`product/static/`):
+
+- **Strict validation & session hygiene**: Pydantic v2 schemas (`src/schemas.py`) enforce physiological bounds, reject sentinel zeros (`chol=0`/`trestbps=0`), reject `NaN`/`Inf`, reject hospital IDs (`dataset`), and block personal identifiers (`patient_name`, `mrn`, `email`, `ssn`, etc.). API routes set `Cache-Control: no-store` and never log or persist patient inputs. Error handlers redact tokens, secrets, and private filesystem paths (`src/security.py`).
+- **Honest per-patient uncertainty**: Every prediction pairs the frozen baseline (`models/heart_model.joblib`, threshold `0.39`) with a 95% bootstrap epistemic interval from a separately versioned ensemble (`models/candidates/uncertainty_bootstrap_v1.joblib`, `B=200` training resamples), missing-field imputation warnings, exact log-odds feature contributions, and the harmonized calibrated reference probability.
+- **Informational assistant layer (`src/assistant.py`, `src/meta_client.py`, `src/meta_ledger.py`)**:
+  - **Local offline mode (`use_external_meta_api=false`)**: Runs 100% locally in Python with zero network calls for any validated de-identified measurement set.
+  - **Metered Meta API adapter (`use_external_meta_api=true`)**: Strictly enforced in code to accept **registered SYNTHETIC archetype profiles only** (`SYNTH-001`–`SYNTH-006`, verified by SHA-256 digest in `src/synthetic_profiles.py`). Real or custom patient data is refused before any payload is built.
+  - **Spend honesty & replay-first**: Defaults to `HEART_ASSISTANT_MODE=replay` ($0.00 spend against explicitly labeled offline schema replay stubs in `fixtures/recorded/`). Live/record calls (`https://api.meta.ai/v1`, Standard-mode `muse-spark-1.3`, ~$0.002/call worst-case) stay refused until an operator sets `HEART_ASSISTANT_MODE=live` (or `record`), `HEART_LIVE_CLEARED=1`, and `MODEL_API_KEY`, with worst-case reserve-before-call checks and a hash-chained JSONL spend ledger. Live Meta API runs remain **unverified** until executed with operator credentials.
+
 ## Run it yourself
 
 ```bash
@@ -122,8 +157,12 @@ pip install -r requirements.txt
 
 python data/download_data.py       # downloads the UCI data into data/
 python -m src.explore              # data report + the two data charts
-python -m src.train                # trains and compares the models, saves plots and the final model
-streamlit run app.py               # opens the app in your browser
+python -m src.harmonization        # trains versioned candidates in models/candidates/ (baseline untouched)
+python -m src.statistics           # calibration, LOHO source shift, subgroups, bootstrap CIs
+pytest -v                          # full test suite (baseline integrity, stats, privacy, ledger, API)
+
+uvicorn product.api:app --port 8000  # FastAPI + static UI product app
+streamlit run app.py                 # Streamlit prototype UI
 ```
 
 ## Using the app

@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Heart-Disease Risk Screening System — Informational Prototype</title>
+  <meta name="description" content="A sensitivity-first heart-disease screening prototype on the archival UCI four-hospital cohort, with honest uncertainty. Informational only, Not Medical Advice." />
+  <meta name="theme-color" content="#0E2442" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
   <script>
     (function () {
@@ -20,483 +22,393 @@
   </script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand-wrap">
-        <div class="brand-emblem" aria-hidden="true">
-          <svg viewBox="0 0 40 40" width="38" height="38" fill="none">
-            <rect x="2" y="2" width="36" height="36" rx="11" fill="#FDF0EE" stroke="#E9C7C2" stroke-width="1.2"/>
-            <path d="M20 30.2C20 30.2 9.5 23.6 9.5 15.9C9.5 12.6 12.1 10.2 15.2 10.2C17.2 10.2 19 11.2 20 12.8C21 11.2 22.8 10.2 24.8 10.2C27.9 10.2 30.5 12.6 30.5 15.9C30.5 23.6 20 30.2 20 30.2Z" fill="#B8423B" fill-opacity="0.14" stroke="#B8423B" stroke-width="1.7" stroke-linejoin="round"/>
-            <path class="ecg-trace" d="M11.5 19.2H15.4L17.2 15.6L19.4 23.4L21.8 14.5L23.7 19.2H28.5" stroke="#1B4D54" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="brand">
-          <div class="brand-kicker">Sensitivity-First Cardiac Screening Research</div>
-          <h1>Heart-Disease Risk Screening System</h1>
-          <p>UCI 4-Hospital Archival Cohort (1981–1988) · Frozen Baseline (Threshold 0.39) · Epistemic Uncertainty &amp; Shift Audits</p>
-        </div>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="wordmark">
+        <svg class="wordmark-mark" viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true">
+          <path d="M16 26.5C16 26.5 5.5 20.3 5.5 12.6C5.5 9.3 8.1 6.8 11.2 6.8C13.2 6.8 15 7.9 16 9.5C17 7.9 18.8 6.8 20.8 6.8C23.9 6.8 26.5 9.3 26.5 12.6C26.5 20.3 16 26.5 16 26.5Z" stroke="#F3B9C1" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M8.5 15.6H12.2L13.9 12.2L16.1 19.4L18.3 11.2L19.9 15.6H23.5" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="wordmark-text">Heart-Disease Risk Screening System</span>
       </div>
-      <div class="topbar-actions">
-        <span class="pill pill-info" id="health-pill">Checking readiness…</span>
-        <button type="button" class="btn-ghost" id="clear-session-btn" title="Reset form and clear displayed results">
-          <svg viewBox="0 0 18 18" width="14" height="14" fill="none" aria-hidden="true">
-            <path d="M9 2L14.5 4.3V8.6C14.5 12.1 12.1 15 9 16C5.9 15 3.5 12.1 3.5 8.6V4.3L9 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            <path d="M6.8 9.1L8.4 10.7L11.5 7.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Clear Session
-        </button>
+
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab-btn active" id="tabbtn-screen" data-tab="screen" role="tab" aria-selected="true" aria-controls="tab-screen">Risk screen</button>
+        <button class="tab-btn" id="tabbtn-stats" data-tab="stats" role="tab" aria-selected="false" aria-controls="tab-stats" tabindex="-1">Calibration &amp; shift</button>
+        <button class="tab-btn" id="tabbtn-assistant" data-tab="assistant" role="tab" aria-selected="false" aria-controls="tab-assistant" tabindex="-1">Assistant</button>
+        <button class="tab-btn" id="tabbtn-health" data-tab="health" role="tab" aria-selected="false" aria-controls="tab-health" tabindex="-1">Safeguards</button>
+      </nav>
+
+      <div class="masthead-tools">
+        <span class="status" id="health-pill" data-state="pending" role="status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="health-text">Checking model</span>
+        </span>
+        <button type="button" class="reset-btn" id="clear-session-btn" title="Clear the form and every result on this page">Reset</button>
       </div>
     </div>
   </header>
 
-  <section class="purpose-strip">
+  <section class="purpose" aria-label="About this prototype">
     <div class="purpose-inner">
-      <div class="purpose-story">
-        <span class="purpose-badge">Why threshold 0.39</span>
-        <p>In screening, missing an at-risk patient carries far more human cost than ordering one extra test. Lowering the cutoff from 0.50 to <strong>0.39</strong> halved missed cases from 16 to 8 on the 184-patient cohort — paired here with 95% uncertainty intervals and honest hospital-shift limits.</p>
-      </div>
-      <div class="safety-note">
-        <strong>Informational Prototype Only — Not Medical Advice, Not Clinical Validation.</strong>
-        <span>Zero inputs logged, stored, or sent externally.</span>
-      </div>
+      <p class="purpose-line">
+        Missing someone at risk costs more than one extra test. Lowering the cutoff from 0.50 to <strong>0.39</strong>
+        halved missed high-risk cases from 16 to 8 in the archival test cohort, and every estimate here shows how uncertain it is.
+      </p>
+      <p class="notice">
+        <strong>Informational Prototype Only — Not Medical Advice.</strong>
+        Not clinically validated. Nothing you enter is stored or logged.
+      </p>
     </div>
   </section>
 
-  <nav class="tabs" role="tablist" aria-label="Screening sections">
-    <button class="tab-btn active" data-tab="screen" role="tab" aria-selected="true">
-      <span class="tab-num">01</span> Risk Screen &amp; Uncertainty
-    </button>
-    <button class="tab-btn" data-tab="stats" role="tab" aria-selected="false">
-      <span class="tab-num">02</span> Calibration, Shift &amp; Subgroups
-    </button>
-    <button class="tab-btn" data-tab="assistant" role="tab" aria-selected="false">
-      <span class="tab-num">03</span> Synthetic-Only Assistant
-    </button>
-    <button class="tab-btn" data-tab="health" role="tab" aria-selected="false">
-      <span class="tab-num">04</span> Safeguards &amp; Provenance
-    </button>
-  </nav>
+  <main id="main">
+    <!-- Risk screen -->
+    <section class="tab-panel active" id="tab-screen" role="tabpanel" aria-labelledby="tabbtn-screen">
+      <div class="presets">
+        <span class="presets-label" id="presets-label">Try a synthetic case</span>
+        <div class="preset-row" id="quick-fill-pills" role="group" aria-labelledby="presets-label"></div>
+      </div>
 
-  <main>
-    <!-- TAB 1: SCREENING -->
-    <section class="tab-panel active" id="tab-screen">
-      <div class="grid-screen">
-        <div class="card card-intake">
-          <div class="card-header">
-            <div>
-              <h2>De-Identified Clinical Intake</h2>
-              <p class="muted">Enter measurements below, try a synthetic profile, or mark unmeasured fields as <em>Unknown</em>. Hospital ID and personal identifiers are intentionally excluded.</p>
-            </div>
-          </div>
+      <div class="screen-grid">
+        <form class="panel intake" id="predict-form" autocomplete="off" novalidate>
+          <div id="form-error" class="form-error hidden" role="alert"></div>
 
-          <div class="quick-fill-box">
-            <div class="quick-fill-label">
-              <span class="mono-label">Try a documented synthetic case</span>
-              <span class="muted-xs">100% synthetic archetypes · fills form locally</span>
-            </div>
-            <div class="quick-fill-pills" id="quick-fill-pills"></div>
-          </div>
-
-          <div id="form-error" class="alert alert-danger hidden" role="alert"></div>
-
-          <form id="predict-form" autocomplete="off">
-            <div class="form-section">
-              <div class="section-heading">
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="6.5" r="3" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M4.5 16.5C4.5 13.7 7 11.8 10 11.8C13 11.8 15.5 13.7 15.5 16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                <h3>Patient &amp; Symptoms</h3>
-              </div>
-
-              <div class="grid-2-tight">
-                <div class="field-group">
-                  <label for="age">Age (years)</label>
-                  <input id="age" type="number" min="18" max="110" step="1" value="55" required />
-                  <span class="field-hint">Range 18–110 years</span>
-                </div>
-                <div class="field-group">
-                  <label for="sex">Sex (UCI schema)</label>
-                  <select id="sex">
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                  <span class="field-hint">Model note: LOHO recall lower for women</span>
+          <fieldset class="fs fs-first">
+            <legend>Patient</legend>
+            <div class="row-2">
+              <div class="field">
+                <label for="age">Age</label>
+                <div class="input-unit">
+                  <input id="age" type="number" min="18" max="110" step="1" value="55" required inputmode="numeric" />
+                  <span>years</span>
                 </div>
               </div>
-
-              <div class="field-group">
-                <label for="cp">Chest pain presentation</label>
-                <select id="cp">
-                  <option value="asymptomatic">Asymptomatic (no chest pain reported)</option>
-                  <option value="typical angina">Typical angina (exertional, relieved by rest)</option>
-                  <option value="atypical angina">Atypical angina (meets two angina criteria)</option>
-                  <option value="non-anginal">Non-anginal discomfort</option>
-                </select>
-                <span class="field-hint">In this angiography cohort, silent (asymptomatic) presentation carried higher prevalence.</span>
-              </div>
-
-              <div class="field-group">
-                <label for="exang">Exercise-induced chest pain (<code>exang</code>)</label>
-                <select id="exang">
-                  <option value="false">No — none during exercise</option>
-                  <option value="true">Yes — triggered by exercise</option>
-                  <option value="">Unknown / not tested</option>
+              <div class="field">
+                <label for="sex">Sex</label>
+                <select id="sex">
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
                 </select>
               </div>
             </div>
+            <div class="field">
+              <label for="cp">Chest pain</label>
+              <select id="cp">
+                <option value="asymptomatic">None reported (asymptomatic)</option>
+                <option value="typical angina">Typical angina, brought on by exertion</option>
+                <option value="atypical angina">Atypical angina</option>
+                <option value="non-anginal">Non-anginal discomfort</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="exang">Chest pain during exercise</label>
+              <select id="exang">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+                <option value="">Unknown</option>
+              </select>
+            </div>
+          </fieldset>
 
-            <div class="form-section">
-              <div class="section-heading">
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true">
-                  <path d="M10 3.2C10 3.2 5 8.7 5 12.2C5 15 7.2 17 10 17C12.8 17 15 15 15 12.2C15 8.7 10 3.2 10 3.2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-                <h3>Vitals &amp; Labs</h3>
+          <fieldset class="fs">
+            <legend>Vitals and labs</legend>
+            <div class="field">
+              <div class="label-row">
+                <label for="trestbps">Resting blood pressure</label>
+                <label class="unknown-toggle"><input type="checkbox" data-unknown-for="trestbps" /><span>Unknown</span></label>
               </div>
+              <div class="input-unit">
+                <input id="trestbps" type="number" min="60" max="260" step="1" value="130" inputmode="numeric" />
+                <span>mm Hg</span>
+              </div>
+            </div>
+            <div class="field">
+              <div class="label-row">
+                <label for="chol">Total cholesterol</label>
+                <label class="unknown-toggle"><input type="checkbox" data-unknown-for="chol" /><span>Unknown</span></label>
+              </div>
+              <div class="input-unit">
+                <input id="chol" type="number" min="80" max="700" step="1" value="240" inputmode="numeric" />
+                <span>mg/dL</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="fbs">Fasting blood sugar above 120 mg/dL</label>
+              <select id="fbs">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+                <option value="">Unknown</option>
+              </select>
+            </div>
+          </fieldset>
 
-              <div class="field-row">
-                <div>
-                  <label for="trestbps">Resting systolic blood pressure (mm Hg)</label>
-                  <input id="trestbps" type="number" min="60" max="260" step="1" value="130" />
-                  <span class="field-hint">Valid clinical range 60–260 mm Hg</span>
+          <fieldset class="fs">
+            <legend>Exercise test and ECG</legend>
+            <div class="row-2">
+              <div class="field">
+                <div class="label-row">
+                  <label for="thalch">Peak heart rate</label>
+                  <label class="unknown-toggle"><input type="checkbox" data-unknown-for="thalch" /><span>Unknown</span></label>
                 </div>
-                <label class="unknown-pill"><input type="checkbox" data-unknown-for="trestbps" /><span>Unknown</span></label>
-              </div>
-
-              <div class="field-row">
-                <div>
-                  <label for="chol">Serum total cholesterol (mg/dL)</label>
-                  <input id="chol" type="number" min="80" max="700" step="1" value="240" />
-                  <span class="field-hint">Valid range 80–700 mg/dL (0 is rejected as missing)</span>
+                <div class="input-unit">
+                  <input id="thalch" type="number" min="40" max="230" step="1" value="150" inputmode="numeric" />
+                  <span>bpm</span>
                 </div>
-                <label class="unknown-pill"><input type="checkbox" data-unknown-for="chol" /><span>Unknown</span></label>
               </div>
-
-              <div class="field-group">
-                <label for="fbs">Fasting blood sugar &gt; 120 mg/dL</label>
-                <select id="fbs">
-                  <option value="false">No (≤ 120 mg/dL)</option>
-                  <option value="true">Yes (&gt; 120 mg/dL)</option>
-                  <option value="">Unknown / not measured</option>
+              <div class="field">
+                <div class="label-row">
+                  <label for="oldpeak">ST depression</label>
+                  <label class="unknown-toggle"><input type="checkbox" data-unknown-for="oldpeak" /><span>Unknown</span></label>
+                </div>
+                <div class="input-unit">
+                  <input id="oldpeak" type="number" min="-3" max="10" step="0.1" value="1.0" inputmode="decimal" />
+                  <span>mm</span>
+                </div>
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label for="slope">ST slope at peak exercise</label>
+                <select id="slope">
+                  <option value="flat">Flat</option>
+                  <option value="upsloping">Upsloping</option>
+                  <option value="downsloping">Downsloping</option>
+                  <option value="">Unknown</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="restecg">Resting ECG</label>
+                <select id="restecg">
+                  <option value="normal">Normal</option>
+                  <option value="st-t abnormality">ST-T abnormality</option>
+                  <option value="lv hypertrophy">LV hypertrophy</option>
+                  <option value="">Unknown</option>
                 </select>
               </div>
             </div>
+          </fieldset>
 
-            <div class="form-section">
-              <div class="section-heading">
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true">
-                  <path d="M2.5 10.5H6L8 5.5L10.6 14.5L12.9 7.8L14.5 10.5H17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <h3>Exercise Test &amp; ECG</h3>
-              </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="predict-btn">Estimate risk</button>
+            <span class="form-note">Hospital and personal identifiers are never asked for.</span>
+          </div>
+        </form>
 
-              <div class="field-row">
-                <div>
-                  <label for="thalch">Max exercise heart rate (bpm)</label>
-                  <input id="thalch" type="number" min="40" max="230" step="1" value="150" />
-                  <span class="field-hint">Peak heart rate reached during treadmill stress</span>
-                </div>
-                <label class="unknown-pill"><input type="checkbox" data-unknown-for="thalch" /><span>Unknown</span></label>
-              </div>
-
-              <div class="field-row">
-                <div>
-                  <label for="oldpeak">ST segment depression (<code>oldpeak</code>, mm)</label>
-                  <input id="oldpeak" type="number" min="-3" max="10" step="0.1" value="1.0" />
-                  <span class="field-hint">Exercise-induced ECG depression vs. rest (-3.0 to 10.0)</span>
-                </div>
-                <label class="unknown-pill"><input type="checkbox" data-unknown-for="oldpeak" /><span>Unknown</span></label>
-              </div>
-
-              <div class="grid-2-tight">
-                <div class="field-group">
-                  <label for="slope">Peak exercise ST slope</label>
-                  <select id="slope">
-                    <option value="flat">Flat</option>
-                    <option value="upsloping">Upsloping</option>
-                    <option value="downsloping">Downsloping</option>
-                    <option value="">Unknown</option>
-                  </select>
-                </div>
-
-                <div class="field-group">
-                  <label for="restecg">Resting ECG result</label>
-                  <select id="restecg">
-                    <option value="normal">Normal</option>
-                    <option value="st-t abnormality">ST-T abnormality</option>
-                    <option value="lv hypertrophy">LV hypertrophy</option>
-                    <option value="">Unknown</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button type="submit" class="primary">
-                <span>Run Screening Estimate</span>
-              </button>
-              <button type="button" class="secondary" id="local-explain-btn">
-                <span>Explain Result Locally (No API)</span>
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div class="results-column">
-          <div class="card card-result" id="result-card">
-            <div class="card-header">
-              <div>
-                <h2>Screening Estimate &amp; Honest Uncertainty</h2>
-                <p class="muted">Point estimate with 95% bootstrap uncertainty ribbon, harmonized reference, and exact log-odds feature drivers.</p>
-              </div>
-            </div>
-
-            <div id="result-placeholder" class="empty-state">
-              <div class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 64 44" width="64" height="44" fill="none">
-                  <path d="M4 24H18L23 11L30 35L37 8L43 24H60" stroke="#B8423B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/>
-                  <circle cx="37" cy="8" r="3" fill="#B8423B" opacity="0.8"/>
-                </svg>
-              </div>
-              <h3>Ready for de-identified screening inputs</h3>
-              <p class="muted">Choose a synthetic archetype above or enter measurements on the left to inspect the risk score, 95% confidence band, and plain-language drivers.</p>
-            </div>
-
-            <div id="result-body" class="hidden">
-              <div id="result-banner" class="alert"></div>
-
-              <div class="arc-stage">
-                <svg id="risk-arc-svg" viewBox="0 0 320 176" class="risk-arc-svg" role="img" aria-label="Cardiac screening risk gauge with 95% uncertainty arc and 39% threshold"></svg>
-                <div class="arc-center-readout">
-                  <div class="arc-prob" id="res-prob">—</div>
-                  <div class="arc-caption" id="res-band-label">Baseline Risk Score</div>
-                </div>
-              </div>
-
-              <div class="gauge-wrap" title="Point estimate, 95% bootstrap CI band, and 0.39 cutoff">
-                <div class="gauge-safe-zone" style="width:39%;"></div>
-                <div class="gauge-ci" id="gauge-ci"></div>
-                <div class="gauge-threshold" id="gauge-threshold" style="left:39%;"></div>
-                <div class="gauge-point" id="gauge-point"></div>
-              </div>
-              <div class="gauge-labels">
-                <span>0% Low</span>
-                <span class="cutoff-tag">Sensitivity Cutoff · 39%</span>
-                <span>100% High</span>
-              </div>
-
-              <div class="kpi-grid kpi-grid-3" style="margin-top:16px;">
-                <div class="kpi">
-                  <div class="label">95% Bootstrap CI</div>
-                  <div class="val" id="res-ci">—</div>
-                  <div class="sub" id="res-ci-sub">B=200 train resamples</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Harmonized Ref</div>
-                  <div class="val" id="res-cal">—</div>
-                  <div class="sub">Site-deconfounded Platt v1</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Sensitivity Cutoff</div>
-                  <div class="val">39.0%</div>
-                  <div class="sub">Frozen LR baseline</div>
-                </div>
-              </div>
-
-              <div id="res-imputation-warn" class="alert alert-warn hidden"></div>
-              <div id="res-shift-warn" class="alert alert-info"></div>
-
-              <div class="contrib-header">
-                <h3>What Moved This Estimate (Log-Odds)</h3>
-                <div class="contrib-legend">
-                  <span class="leg-item"><i class="dot dot-dn"></i> Lowers risk</span>
-                  <span class="leg-item"><i class="dot dot-up"></i> Raises risk</span>
-                </div>
-              </div>
-              <div id="res-contribs"></div>
-            </div>
+        <section class="panel result" id="result-card" aria-live="polite" aria-label="Screening estimate">
+          <div id="result-placeholder" class="placeholder">
+            <svg viewBox="0 0 220 40" width="220" height="40" fill="none" aria-hidden="true">
+              <path d="M2 22H70L78 10L90 32L101 4L110 22H218" stroke="#B9C7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p>Enter measurements or choose a synthetic case to see the estimate, its 95% uncertainty band, and what moved it.</p>
           </div>
 
-          <div class="card card-explain hidden" id="local-explain-card">
-            <div class="card-header-row">
-              <h2>Plain-Language Clinical Summary</h2>
-              <span class="pill pill-ok">100% Local · Zero Network Calls</span>
+          <div id="result-body" class="hidden">
+            <div class="readout">
+              <span class="readout-num" id="res-prob">—</span>
+              <span class="readout-caption">estimated probability of angiographic heart disease</span>
             </div>
-            <p id="local-explain-text" class="explain-prose"></p>
-            <ul id="local-explain-takeaways" class="takeaway-list"></ul>
+
+            <svg id="risk-line" class="risk-line" viewBox="0 0 560 96" role="img" aria-label="Estimated probability on a 0 to 100 percent scale, with its 95% interval and the 39% screening cutoff"></svg>
+
+            <p class="verdict" id="result-banner"></p>
+            <p class="verdict-note" id="res-band-label"></p>
+
+            <dl class="facts">
+              <div><dt>95% interval</dt><dd id="res-ci">—</dd></div>
+              <div><dt>Calibrated reference</dt><dd id="res-cal">—</dd></div>
+              <div><dt>Unknown fields</dt><dd id="res-missing">—</dd></div>
+            </dl>
+
+            <p id="res-imputation-warn" class="note note-warn hidden"></p>
+
+            <div class="drivers-head">
+              <h3>What moved this estimate</h3>
+              <span class="drivers-legend"><i class="key key-dn" aria-hidden="true"></i>Lowers <i class="key key-up" aria-hidden="true"></i>Raises</span>
+            </div>
+            <div id="res-contribs" class="drivers"></div>
+
+            <details class="disclosure" id="shift-details">
+              <summary>Why this number may not transfer to you</summary>
+              <div class="disclosure-body">
+                <p id="res-shift-warn"></p>
+                <p id="res-cal-note"></p>
+              </div>
+            </details>
+
+            <details class="disclosure" id="explain-details">
+              <summary>Read a plain-language explanation</summary>
+              <div class="disclosure-body">
+                <p id="local-explain-status" class="muted">Written on this server. No outside service is used.</p>
+                <p id="local-explain-text" class="prose"></p>
+                <ul id="local-explain-takeaways" class="plain-list"></ul>
+              </div>
+            </details>
           </div>
-        </div>
+        </section>
       </div>
     </section>
 
-    <!-- TAB 2: STATISTICS -->
-    <section class="tab-panel" id="tab-stats">
-      <div class="card">
-        <div class="card-header-row">
-          <div>
-            <h2>Statistical Deepening: Calibration, 4-Hospital Shift &amp; Harmonization</h2>
-            <p class="muted" id="stats-meta-note">Loading statistical report…</p>
+    <!-- Calibration & shift -->
+    <section class="tab-panel" id="tab-stats" role="tabpanel" aria-labelledby="tabbtn-stats">
+      <header class="tab-intro">
+        <h2>How far the model's probabilities can be trusted</h2>
+        <p id="stats-meta-note" class="muted">Loading the statistical report.</p>
+      </header>
+
+      <dl class="figures" id="stats-kpis"></dl>
+
+      <div class="stats-grid">
+        <figure class="panel chart-panel">
+          <figcaption>
+            <h3>Calibration</h3>
+            <p class="muted">When the model says 60%, how often was disease actually found? Points on the dashed line are perfectly calibrated. Bars show 95% Wilson intervals.</p>
+          </figcaption>
+          <div class="chart-wrap">
+            <svg id="cal-svg" viewBox="0 0 460 330" class="cal-svg" role="img" aria-label="Calibration curves for cross-validation, unseen hospitals, and the historical test set"></svg>
+            <div id="cal-tip" class="chart-tip hidden" role="tooltip"></div>
           </div>
-          <span class="pill pill-info">Zero Hospital Leakage</span>
-        </div>
-        <div class="kpi-grid kpi-grid-4" id="stats-kpis"></div>
-      </div>
+          <ul class="chart-legend">
+            <li><i style="background:#173B69"></i>Cross-validation, n=736</li>
+            <li><i style="background:#C23A4D"></i>Unseen hospital, n=920</li>
+            <li><i style="background:#6F9BC6"></i>Historical test, n=184</li>
+          </ul>
+        </figure>
 
-      <div class="grid-2-eq">
-        <div class="card">
-          <h2>Calibration Reliability Curve</h2>
-          <p class="muted">Quantile bins with 95% Wilson intervals comparing unspent 5-fold OOF CV (n=736), unseen-hospital LOHO (n=920), and read-only historical baseline audit (n=184).</p>
-          <svg id="cal-svg" viewBox="0 0 460 320" class="cal-svg" role="img" aria-label="Calibration curve across OOF CV, LOHO, and historical baseline"></svg>
-        </div>
-
-        <div class="card">
-          <h2>Leave-One-Hospital-Out (LOHO) Source Shift</h2>
-          <p class="muted">Trained on 3 clinics, tested on the 4th completely unseen clinic. Shows why pooling 4 hospitals hides severe site-level probability bias.</p>
+        <section class="panel">
+          <h3>Testing on a hospital the model never saw</h3>
+          <p class="muted">Trained on three hospitals, tested on the fourth. Pooled results hide how far probabilities drift from site to site.</p>
           <div class="table-wrap">
             <table id="loho-table">
               <thead>
                 <tr>
-                  <th>Unseen Hospital</th>
-                  <th>n (Prev)</th>
-                  <th>Recall (95% CI)</th>
-                  <th>AUC</th>
-                  <th>Bias (pp)</th>
-                  <th>ECE</th>
+                  <th scope="col">Held-out hospital</th>
+                  <th scope="col" class="num">Patients</th>
+                  <th scope="col" class="num">Recall (95% CI)</th>
+                  <th scope="col" class="num">AUC</th>
+                  <th scope="col" class="num">Bias</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
 
-      <div class="card">
-        <h2>Hospital Harmonization &amp; Missingness-Proxy Ablation</h2>
-        <p class="muted">Measured on nested train CV (n=736) and zero-site-overlap LOHO (n=920). Adding missingness indicators improves pooled CV (0.865 → 0.877) but hurts unseen sites (0.811 → 0.802) because missingness encodes hospital identity.</p>
+      <section class="panel">
+        <h3>Harmonizing across hospitals</h3>
+        <p class="muted">Nested cross-validation (n=736) against unseen-hospital testing (n=920). Missingness indicators look better pooled but worse on new sites, because which tests were skipped quietly encodes the hospital.</p>
         <div class="table-wrap">
           <table id="harm-table">
             <thead>
               <tr>
-                <th>Strategy</th>
-                <th>Site-ID Free?</th>
-                <th>Train CV AUC</th>
-                <th>Train CV ECE</th>
-                <th>LOHO Macro AUC</th>
-                <th>LOHO Macro ECE</th>
-                <th>LOHO Macro Brier</th>
+                <th scope="col">Strategy</th>
+                <th scope="col">Uses hospital ID</th>
+                <th scope="col" class="num">CV AUC</th>
+                <th scope="col" class="num">CV ECE</th>
+                <th scope="col" class="num">Unseen AUC</th>
+                <th scope="col" class="num">Unseen ECE</th>
+                <th scope="col" class="num">Unseen Brier</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
-        <h2>Subgroup Sensitivity &amp; Fairness Audit (LOHO @ 0.39, n=920)</h2>
-        <p class="muted">Honest breakdown across hospital, sex, age, missingness, and chest-pain presentation. Highlights where sensitivity drops (e.g., women 70.0% and 3+ missing fields 69.2%).</p>
+      <section class="panel">
+        <h3>Who the cutoff misses more often</h3>
+        <p class="muted">Recall at the 0.39 cutoff on unseen hospitals, by subgroup. Sensitivity drops for women and for intakes with three or more unknown fields.</p>
         <div class="table-wrap">
           <table id="subgroup-table">
             <thead>
               <tr>
-                <th>Dimension</th>
-                <th>Subgroup</th>
-                <th>n (pos)</th>
-                <th>Recall (95% CI)</th>
-                <th>Precision</th>
-                <th>ROC-AUC</th>
-                <th>ECE</th>
-                <th>Caveat</th>
+                <th scope="col">Group</th>
+                <th scope="col">Subgroup</th>
+                <th scope="col" class="num">Patients (with disease)</th>
+                <th scope="col" class="num">Recall (95% CI)</th>
+                <th scope="col" class="num">Precision</th>
+                <th scope="col" class="num">AUC</th>
+                <th scope="col" class="num">ECE</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
-      </div>
+      </section>
     </section>
 
-    <!-- TAB 3: SYNTHETIC-ONLY ASSISTANT -->
-    <section class="tab-panel" id="tab-assistant">
-      <div class="grid-2-eq">
-        <div class="card">
-          <h2>Privacy-First Explanation Assistant</h2>
-          <div class="alert alert-info">
-            <strong>Strict Privacy Wall:</strong> External Meta API calls accept <strong>only</strong> the registered synthetic archetype profiles below (SHA-256 verified) and fixed question templates. Real or custom inputs are blocked in code and answered locally offline.
-          </div>
+    <!-- Assistant -->
+    <section class="tab-panel" id="tab-assistant" role="tabpanel" aria-labelledby="tabbtn-assistant">
+      <div class="assistant-grid">
+        <section class="panel">
+          <h2>Explain a synthetic case</h2>
+          <p class="muted lede">The outside assistant only ever sees six documented synthetic profiles and a fixed set of questions. Questions you write yourself are answered on this server, offline.</p>
 
-          <div class="field-group">
-            <label>Choose a Registered Synthetic Profile</label>
-            <div class="synth-cards" id="synth-cards"></div>
-            <select id="synth-select" class="sr-only-select" aria-label="Registered Synthetic Archetype Profile"></select>
-          </div>
-          <p class="muted scenario-box" id="synth-scenario"></p>
+          <fieldset class="fs fs-flat">
+            <legend>Synthetic case</legend>
+            <div class="choice-list" id="synth-cards" role="radiogroup" aria-label="Synthetic case"></div>
+            <select id="synth-select" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
+            <p id="synth-scenario" class="scenario muted"></p>
+          </fieldset>
 
-          <div class="field-group">
-            <label for="assistant-template">Canonical Question Template (for External Meta Adapter)</label>
+          <div class="ask-block">
+            <label for="assistant-template">Ask the external assistant</label>
             <select id="assistant-template"></select>
+            <button type="button" class="btn btn-primary" id="ask-meta-btn">Ask external assistant</button>
+            <p class="hint">Fixed questions only. Runs from recorded replies until an operator approves live calls.</p>
           </div>
 
-          <div class="field-group">
-            <label for="assistant-question">Custom Free-Text Question (Answered Locally Offline Only)</label>
-            <textarea id="assistant-question" rows="3">Explain this screening result, the main drivers, and its uncertainty in plain language.</textarea>
+          <div class="ask-block">
+            <label for="assistant-question">Or write your own question</label>
+            <textarea id="assistant-question" rows="3">What do the ST slope and the 0.39 threshold mean for this case?</textarea>
+            <button type="button" class="btn btn-secondary" id="ask-local-synth-btn">Answer offline</button>
           </div>
 
-          <div class="actions">
-            <button type="button" class="primary" id="ask-meta-btn">Explain via Metered Meta Adapter</button>
-            <button type="button" class="secondary" id="ask-local-synth-btn">Explain Locally Offline</button>
-          </div>
-          <div id="assistant-error" class="alert alert-danger hidden" style="margin-top:12px;"></div>
-        </div>
+          <div id="assistant-error" class="form-error hidden" role="alert"></div>
+        </section>
 
-        <div class="card">
-          <h2>Assistant Response &amp; Spend Guard</h2>
-          <div class="kpi-grid kpi-grid-2" id="ledger-kpis"></div>
+        <section class="panel answer" aria-live="polite" aria-label="Assistant answer">
+          <p class="ledger-line" id="ledger-kpis"></p>
+          <div id="assistant-placeholder" class="placeholder placeholder-compact">
+            <p>Choose a case and ask a question. The answer, its key points, and its uncertainty appear here.</p>
+          </div>
           <div id="assistant-output" class="hidden">
-            <div class="pill-bar">
-              <span class="pill pill-info" id="asst-mode-pill"></span>
-              <span class="pill pill-warn">Informational Only · Not Medical Advice</span>
-            </div>
-            <p id="asst-text" class="explain-prose"></p>
-            <h3>Key Takeaways</h3>
-            <ul id="asst-takeaways" class="takeaway-list"></ul>
-            <h3>Honest Uncertainty Reminders</h3>
-            <ul id="asst-uncertainty" class="takeaway-list takeaway-warn"></ul>
+            <p class="answer-meta" id="asst-mode-pill"></p>
+            <p id="asst-text" class="prose"></p>
+            <h3>Key points</h3>
+            <ul id="asst-takeaways" class="plain-list"></ul>
+            <h3>How uncertain this is</h3>
+            <ul id="asst-uncertainty" class="plain-list plain-list-quiet"></ul>
           </div>
-          <div id="assistant-placeholder" class="empty-state compact">
-            <p class="muted">Select a synthetic profile on the left and run either the local explainer or the metered Meta adapter (replay mode by default) to inspect the plain-language explanation and uncertainty reminders.</p>
-          </div>
-        </div>
+        </section>
       </div>
     </section>
 
-    <!-- TAB 4: SAFEGUARDS & PROVENANCE -->
-    <section class="tab-panel" id="tab-health">
-      <div class="card">
-        <div class="card-header-row">
-          <div>
-            <h2>Clinical &amp; Engineering Safeguards</h2>
-            <p class="muted">Live runtime verification of baseline immutability, leakage prevention, and privacy guarantees.</p>
-          </div>
-          <span class="pill pill-ok" id="provenance-badge">Live Probe</span>
-        </div>
-        <div class="safeguards-grid" id="safeguards-grid"></div>
-      </div>
+    <!-- Safeguards -->
+    <section class="tab-panel" id="tab-health" role="tabpanel" aria-labelledby="tabbtn-health">
+      <section class="panel safeguards">
+        <h2>Safeguards</h2>
+        <p class="muted">Checked live against the running server each time this page loads.</p>
+        <ul class="checklist" id="safeguards-grid"></ul>
 
-      <div class="card">
-        <details class="raw-details">
-          <summary>Raw Readiness Probe JSON (<code>/api/health</code>)</summary>
-          <pre id="health-json" class="mono-box"></pre>
+        <details class="disclosure">
+          <summary><span>Readiness probe (<code>/api/health</code>)</span></summary>
+          <pre id="health-json" class="raw"></pre>
         </details>
-        <details class="raw-details" style="margin-top:12px;">
-          <summary>Frozen Baseline &amp; Candidate Provenance JSON (<code>/api/model/info</code>)</summary>
-          <pre id="model-json" class="mono-box"></pre>
+        <details class="disclosure">
+          <summary><span>Model provenance (<code>/api/model/info</code>)</span></summary>
+          <pre id="model-json" class="raw"></pre>
         </details>
-      </div>
+      </section>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>UCI Multi-Site Angiography Cohort (Janosi et al. 1988 / Detrano et al. 1989 · CC BY 4.0)</span>
-    <span>Informational Research Prototype · Not Medical Advice</span>
+    <p>Data: UCI Heart Disease, four hospitals, 1981–1988 (Janosi et al.; Detrano et al., 1989; CC BY 4.0).</p>
+    <p>Informational research prototype. Not Medical Advice.</p>
   </footer>
 
   <script src="/static/app.js"></script>

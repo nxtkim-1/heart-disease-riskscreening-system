@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "{models/**,reports/statistical_deepening.json,fixtures/recorded/**,product/static/**,data/heart_disease_uci.csv}"
+    }
+  }
+}

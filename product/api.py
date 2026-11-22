@@ -107,12 +107,17 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["X-Frame-Options"] = "DENY"
         if request.url.path.startswith("/api/"):
+            response.headers["X-Frame-Options"] = "DENY"
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["X-Session-Ephemeral"] = "true"
             response.headers["X-Patient-Data-Persisted"] = "false"
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "frame-ancestors 'self' https://www.thomas-kim.dev https://thomas-kim.dev "
+                "https://*.vercel.app http://localhost:* http://127.0.0.1:*"
+            )
         return response
 
     @app.exception_handler(RequestValidationError)

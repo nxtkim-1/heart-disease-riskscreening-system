@@ -207,3 +207,18 @@ def test_unhandled_error_redacts_secret_and_private_path(monkeypatch, tmp_path):
     assert "secretuser" not in msg
     assert "[REDACTED_PATH]" in msg
     assert "RuntimeError" in msg
+
+
+def test_frontend_allows_portfolio_framing_while_api_denies(tmp_path):
+    client = _make_client(tmp_path)
+
+    idx = client.get("/")
+    assert idx.status_code == 200
+    assert "x-frame-options" not in idx.headers
+    csp = idx.headers.get("content-security-policy", "")
+    assert "frame-ancestors" in csp
+    assert "https://www.thomas-kim.dev" in csp
+
+    health = client.get("/api/health")
+    assert health.status_code == 200
+    assert health.headers["x-frame-options"] == "DENY"

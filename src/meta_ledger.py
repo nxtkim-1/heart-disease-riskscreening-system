@@ -82,7 +82,11 @@ def assert_standard_model(model_id: str) -> str:
 
 def resolve_ledger_path() -> Path:
     env = os.environ.get("HEART_LEDGER_PATH")
-    return Path(env) if env else DEFAULT_LEDGER_PATH
+    if env:
+        return Path(env)
+    if os.environ.get("VERCEL"):
+        return Path("/tmp/.heart_screen/meta_spend_ledger.jsonl")
+    return DEFAULT_LEDGER_PATH
 
 
 def _positive_number(d: dict[str, Any] | None, key: str, label: str) -> float:

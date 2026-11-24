@@ -10,6 +10,32 @@ Telling a sick patient they're fine is worse than a false alarm, because a false
 means a follow-up test. So I didn't optimise for accuracy. I set the model up to catch at least 90%
 of sick patients and then measured how many false alarms that costs.
 
+## Architecture
+
+The constraint this project is built around: **the 184 test patients are read once, at the very end; every cleaning, tuning and selection decision is made on the training data, and the model that ships is a frozen, hash-verified artifact.**
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#f2f5ff", "primaryBorderColor": "#445566", "primaryTextColor": "#111111", "lineColor": "#333333", "fontSize": "15px"}}}%%
+flowchart TD
+  UCI["UCI data<br/>920 patients"] --> CLN["Cleaning<br/>src/data.py"] --> SP["One 80/20 split"] --> TR["Train + tune on CV<br/>src/train.py"]
+  TR --> MDL[("Frozen baseline<br/>SHA-256 verified")]
+  TR --> CAND[("Candidates:<br/>uncertainty + calibrated")]
+  MDL --> INF["Inference<br/>src/inference.py"]
+  CAND --> INF
+  INF --> UI["Streamlit + FastAPI apps"] --> AST["Assistant<br/>synthetic profiles only"]
+  AUD["Test metrics +<br/>hospital-out audit"]
+  SP -. "read once" .-> AUD
+  linkStyle default stroke:#333333,stroke-width:1.5px,color:#111111
+```
+
+1. Cleaning decisions are made before modelling and shared by training and serving, so a row typed into the app is cleaned exactly like a training row (src/data.py).
+2. Each model is a full sklearn Pipeline: imputation and scaling are fitted on training folds only, so no test information leaks into training.
+3. Thresholds are chosen by cross-validation to catch at least 90% of sick patients; the final model was picked by a rule fixed before the test set was read (fewest false alarms among qualifying models).
+4. Serving loads the frozen baseline and verifies its SHA-256 first; a failed check stops the app, it does not fall back to an unverified model.
+5. Every prediction carries its uncertainty interval, the per-feature contributions behind it, and explicit warnings (imputed fields, threshold proximity, 1981-1988 angiography cohort shift).
+
+Design decisions, measured results and limits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Case study: the 1989 paper behind the data
 
 ![Greyscale X-ray of the left coronary artery filled with dye, with two arrows marking narrowed sections](docs/coronary_angiogram.jpg)
